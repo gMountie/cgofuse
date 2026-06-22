@@ -2,8 +2,7 @@ name: test
 
 on:
   push:
-    branches:
-      - "*"
+    branches: [master]
   pull_request:
   workflow_dispatch:
 
@@ -15,7 +14,7 @@ jobs:
       GOARCH: ${{ matrix.arch }}
       CGO_ENABLED: ${{ matrix.cgo }}
       CPATH: ${{ matrix.cpath }}
-      GODEBUG: cgocheck=2
+      GOEXPERIMENT: cgocheck2
     strategy:
       matrix:
         include:
@@ -50,7 +49,8 @@ jobs:
       - name: Install go
         uses: actions/setup-go@v5
         with:
-          go-version: 1.20.*
+          go-version-file: go.mod
+          cache-dependency-path: go.mod
 
       - name: Install winfsp and winfsp-tests (Windows)
         if: runner.os == 'Windows'
@@ -113,6 +113,18 @@ jobs:
           # remove irrelevant tests
           rm -rf secfs.test/fstest/fstest/tests/xacl
           rm -rf secfs.test/fstest/fstest/tests/zzz_ResourceFork
+
+      - name: Lint and vet (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          go vet ./fuse
+          test -z "$(gofmt -l fuse/)"
+
+      - name: Race-enabled unit tests (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          go test -race -count=1 ./fuse
+          go test -race -tags=fuse3 -count=1 ./fuse
 
       - name: Build packages with FUSE2
         run: |
