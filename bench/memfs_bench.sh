@@ -14,8 +14,11 @@
 #
 set -euo pipefail
 
+# Default size is modest because FUSE2 without big_writes caps writes at one
+# page (4K), so its sequential write is very slow and otherwise dominates the
+# run. Override SIZE for a heavier comparison.
 ITERS="${ITERS:-2}"
-SIZE="${SIZE:-256M}"
+SIZE="${SIZE:-64M}"
 OUT="${OUT:-$(mktemp -d)}"
 EXTRA_OPTS=("$@")
 
