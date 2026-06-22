@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 `github.com/winfsp/cgofuse` — a cross-platform FUSE library for Go. User-mode
 file systems implement `fuse.FileSystemInterface` (or embed `fuse.FileSystemBase`
 for defaults) and mount via `fuse.NewFileSystemHost(...).Mount(...)`. Single Go
-module, `go 1.17`, no third-party dependencies. The only importable package is
+module, `go 1.26`, no third-party dependencies. The only importable package is
 `./fuse`; `./examples/...` are runnable demo file systems.
 
 This checkout lives inside the `~/git/gMountie` org container as a dependency of
