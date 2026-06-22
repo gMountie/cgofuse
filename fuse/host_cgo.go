@@ -420,6 +420,11 @@ extern int go_hostGetpath(char *path, char *buf, size_t size,
 extern int go_hostSetchgtime(char *path, fuse_timespec_t *tv);
 extern int go_hostSetcrtime(char *path, fuse_timespec_t *tv);
 extern int go_hostChflags(char *path, uint32_t flags);
+extern fuse_off_t go_hostCopyFileRange(char *path_in, struct fuse_file_info *fi_in, fuse_off_t off_in,
+	char *path_out, struct fuse_file_info *fi_out, fuse_off_t off_out, size_t size, int flags);
+extern fuse_off_t go_hostLseek(char *path, fuse_off_t off, int whence, struct fuse_file_info *fi);
+extern int go_hostFallocate(char *path, int mode, fuse_off_t off, fuse_off_t length,
+	struct fuse_file_info *fi);
 
 static inline void hostAsgnCconninfo(struct fuse_conn_info *conn,
 	bool capCaseInsensitive,
@@ -752,6 +757,16 @@ static int hostMount(int argc, char *argv[], void *data)
 		.setchgtime = (int (*)(const char *, const fuse_timespec_t *))go_hostSetchgtime,
 		.setcrtime = (int (*)(const char *, const fuse_timespec_t *))go_hostSetcrtime,
 		.chflags = (int (*)(const char *, uint32_t))go_hostChflags,
+#endif
+#if FUSE_USE_VERSION >= 30 && defined(FUSE_VERSION) && FUSE_VERSION >= 304
+		.copy_file_range = (ssize_t (*)(const char *, struct fuse_file_info *, off_t,
+			const char *, struct fuse_file_info *, off_t, size_t, int))go_hostCopyFileRange,
+#endif
+#if FUSE_USE_VERSION >= 30 && defined(FUSE_VERSION) && FUSE_VERSION >= 308
+		.lseek = (off_t (*)(const char *, off_t, int, struct fuse_file_info *))go_hostLseek,
+#endif
+#if FUSE_USE_VERSION >= 30
+		.fallocate = (int (*)(const char *, int, off_t, off_t, struct fuse_file_info *))go_hostFallocate,
 #endif
 	};
 #if defined(_WIN32)
@@ -1321,4 +1336,23 @@ func go_hostSetcrtime(path0 *c_char, tmsp0 *c_fuse_timespec_t) (errc0 c_int) {
 //export go_hostChflags
 func go_hostChflags(path0 *c_char, flags c_uint32_t) (errc0 c_int) {
 	return hostChflags(path0, flags)
+}
+
+//export go_hostCopyFileRange
+func go_hostCopyFileRange(pathIn0 *c_char, fiIn0 *c_struct_fuse_file_info, offIn0 c_fuse_off_t,
+	pathOut0 *c_char, fiOut0 *c_struct_fuse_file_info, offOut0 c_fuse_off_t,
+	size0 c_size_t, flags0 c_int) (nbyt0 c_fuse_off_t) {
+	return hostCopyFileRange(pathIn0, fiIn0, offIn0, pathOut0, fiOut0, offOut0, size0, flags0)
+}
+
+//export go_hostLseek
+func go_hostLseek(path0 *c_char, off0 c_fuse_off_t, whence0 c_int,
+	fi0 *c_struct_fuse_file_info) (rslt0 c_fuse_off_t) {
+	return hostLseek(path0, off0, whence0, fi0)
+}
+
+//export go_hostFallocate
+func go_hostFallocate(path0 *c_char, mode0 c_int, off0 c_fuse_off_t, length0 c_fuse_off_t,
+	fi0 *c_struct_fuse_file_info) (errc0 c_int) {
+	return hostFallocate(path0, mode0, off0, length0, fi0)
 }

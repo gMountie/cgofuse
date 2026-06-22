@@ -102,6 +102,19 @@ func recoverAsErrno(errc0 *c_int) {
 	}
 }
 
+// recoverAsErrno64 is recoverAsErrno for operations whose result is a 64-bit
+// signed value (a byte count or file offset) rather than a plain errno.
+func recoverAsErrno64(rslt0 *c_fuse_off_t) {
+	if r := recover(); nil != r {
+		switch e := r.(type) {
+		case Error:
+			*rslt0 = c_fuse_off_t(e)
+		default:
+			*rslt0 = -c_fuse_off_t(EIO)
+		}
+	}
+}
+
 func hostGetattr(path0 *c_char, stat0 *c_fuse_stat_t, fi0 *c_struct_fuse_file_info) (errc0 c_int) {
 	defer recoverAsErrno(&errc0)
 	fsop := hostHandleGet(c_fuse_get_context().private_data).fsop
@@ -440,6 +453,62 @@ func hostFsyncdir(path0 *c_char, datasync c_int, fi0 *c_struct_fuse_file_info) (
 	if -ENOSYS == errc {
 		errc = 0
 	}
+	return c_int(errc)
+}
+
+func hostCopyFileRange(pathIn0 *c_char, fiIn0 *c_struct_fuse_file_info, offIn0 c_fuse_off_t,
+	pathOut0 *c_char, fiOut0 *c_struct_fuse_file_info, offOut0 c_fuse_off_t,
+	size0 c_size_t, flags0 c_int) (nbyt0 c_fuse_off_t) {
+	defer recoverAsErrno64(&nbyt0)
+	fsop := hostHandleGet(c_fuse_get_context().private_data).fsop
+	intf, ok := fsop.(FileSystemCopyFileRange)
+	if !ok {
+		return -c_fuse_off_t(ENOSYS)
+	}
+	pathIn, pathOut := c_GoString(pathIn0), c_GoString(pathOut0)
+	fhIn, fhOut := ^uint64(0), ^uint64(0)
+	if nil != fiIn0 {
+		fhIn = uint64(fiIn0.fh)
+	}
+	if nil != fiOut0 {
+		fhOut = uint64(fiOut0.fh)
+	}
+	nbyt := intf.CopyFileRange(pathIn, fhIn, int64(offIn0),
+		pathOut, fhOut, int64(offOut0), int(size0), uint32(flags0))
+	return c_fuse_off_t(nbyt)
+}
+
+func hostLseek(path0 *c_char, off0 c_fuse_off_t, whence0 c_int,
+	fi0 *c_struct_fuse_file_info) (rslt0 c_fuse_off_t) {
+	defer recoverAsErrno64(&rslt0)
+	fsop := hostHandleGet(c_fuse_get_context().private_data).fsop
+	intf, ok := fsop.(FileSystemLseek)
+	if !ok {
+		return -c_fuse_off_t(ENOSYS)
+	}
+	path := c_GoString(path0)
+	fifh := ^uint64(0)
+	if nil != fi0 {
+		fifh = uint64(fi0.fh)
+	}
+	rslt := intf.Lseek(path, int64(off0), int(whence0), fifh)
+	return c_fuse_off_t(rslt)
+}
+
+func hostFallocate(path0 *c_char, mode0 c_int, off0 c_fuse_off_t, length0 c_fuse_off_t,
+	fi0 *c_struct_fuse_file_info) (errc0 c_int) {
+	defer recoverAsErrno(&errc0)
+	fsop := hostHandleGet(c_fuse_get_context().private_data).fsop
+	intf, ok := fsop.(FileSystemFallocate)
+	if !ok {
+		return -c_int(ENOSYS)
+	}
+	path := c_GoString(path0)
+	fifh := ^uint64(0)
+	if nil != fi0 {
+		fifh = uint64(fi0.fh)
+	}
+	errc := intf.Fallocate(path, int(mode0), int64(off0), int64(length0), fifh)
 	return c_int(errc)
 }
 

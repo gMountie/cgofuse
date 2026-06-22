@@ -311,6 +311,56 @@ func (self *Memfs) Write(path string, buff []byte, ofst int64, fh uint64) (n int
 	return
 }
 
+func (self *Memfs) CopyFileRange(pathIn string, fhIn uint64, offIn int64,
+	pathOut string, fhOut uint64, offOut int64, size int, flags uint32) (n int) {
+	defer trace(pathIn, fhIn, offIn, pathOut, fhOut, offOut, size, flags)(&n)
+	defer self.synchronize()()
+	nodeIn := self.getNode(pathIn, fhIn)
+	nodeOut := self.getNode(pathOut, fhOut)
+	if nil == nodeIn || nil == nodeOut {
+		return -fuse.ENOENT
+	}
+	endIn := offIn + int64(size)
+	if endIn > nodeIn.stat.Size {
+		endIn = nodeIn.stat.Size
+	}
+	if endIn <= offIn {
+		return 0
+	}
+	n = int(endIn - offIn)
+	endOut := offOut + int64(n)
+	if endOut > nodeOut.stat.Size {
+		nodeOut.data = resize(nodeOut.data, endOut, true)
+		nodeOut.stat.Size = endOut
+	}
+	copy(nodeOut.data[offOut:endOut], nodeIn.data[offIn:endIn])
+	tmsp := fuse.Now()
+	nodeOut.stat.Ctim = tmsp
+	nodeOut.stat.Mtim = tmsp
+	return
+}
+
+func (self *Memfs) Fallocate(path string, mode int, off int64, length int64, fh uint64) (errc int) {
+	defer trace(path, mode, off, length, fh)(&errc)
+	defer self.synchronize()()
+	node := self.getNode(path, fh)
+	if nil == node {
+		return -fuse.ENOENT
+	}
+	// memfs does not support hole punching or other special modes.
+	if 0 != mode {
+		return -fuse.ENOSYS
+	}
+	end := off + length
+	if end > node.stat.Size {
+		node.data = resize(node.data, end, true)
+		node.stat.Size = end
+	}
+	node.stat.Ctim = fuse.Now()
+	node.stat.Mtim = node.stat.Ctim
+	return 0
+}
+
 func (self *Memfs) Release(path string, fh uint64) (errc int) {
 	defer trace(path, fh)(&errc)
 	defer self.synchronize()()

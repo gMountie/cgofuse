@@ -383,6 +383,35 @@ type FileSystemRename3 interface {
 	Rename3(oldpath string, newpath string, flags uint32) int
 }
 
+// FileSystemCopyFileRange is the interface that wraps the CopyFileRange method.
+//
+// CopyFileRange copies a range of size bytes from the open file identified by
+// pathIn/fhIn at offset offIn to the open file identified by pathOut/fhOut at
+// offset offOut, without the data leaving the file system. It returns the number
+// of bytes copied or a negative error code. [FUSE3 only]
+type FileSystemCopyFileRange interface {
+	CopyFileRange(pathIn string, fhIn uint64, offIn int64,
+		pathOut string, fhOut uint64, offOut int64, size int, flags uint32) int
+}
+
+// FileSystemLseek is the interface that wraps the Lseek method.
+//
+// Lseek repositions the read/write offset of the open file identified by
+// path/fh, honoring whence (including SEEK_DATA and SEEK_HOLE for sparse files).
+// It returns the resulting offset or a negative error code. [FUSE3 only]
+type FileSystemLseek interface {
+	Lseek(path string, off int64, whence int, fh uint64) int64
+}
+
+// FileSystemFallocate is the interface that wraps the Fallocate method.
+//
+// Fallocate manipulates the allocated disk space for the byte range
+// [off, off+length) of the open file identified by path/fh, per the mode flags
+// (e.g. FALLOC_FL_PUNCH_HOLE). It returns 0 or a negative error code. [FUSE3 only]
+type FileSystemFallocate interface {
+	Fallocate(path string, mode int, off int64, length int64, fh uint64) int
+}
+
 // Error encapsulates a FUSE error code. In some rare circumstances it is useful
 // to signal an error to the FUSE layer by boxing the error code using Error and
 // calling panic(). The FUSE layer will recover and report the boxed error code
