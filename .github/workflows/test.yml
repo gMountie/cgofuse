@@ -128,6 +128,12 @@ jobs:
           go build -v -o . ./...
           go build -tags=memfs3 -v -o memfs3${{ matrix.exe }} ./examples/memfs
 
+      - name: Build packages with FUSE3 (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          go build -tags=fuse3 -v -o . ./...
+          go build -tags=fuse3,memfs3 -v -o memfs3${{ matrix.exe }} ./examples/memfs
+
       - name: Test file systems with FUSE2 (Windows)
         if: runner.os == 'Windows'
         run: |
