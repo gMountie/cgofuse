@@ -79,6 +79,43 @@ func recoverAsErrno64(rslt0 *c_fuse_off_t) {
 	}
 }
 
+// hostOps holds the optional FileSystemInterface extensions that a file system
+// may additionally implement. They are resolved once (see resolveOps, called
+// from NewFileSystemHost) instead of type-asserting on every operation; a nil
+// field means the file system does not implement that interface.
+type hostOps struct {
+	openEx        FileSystemOpenEx
+	getpath       FileSystemGetpath
+	chflags       FileSystemChflags
+	setcrtime     FileSystemSetcrtime
+	setchgtime    FileSystemSetchgtime
+	chmod3        FileSystemChmod3
+	chown3        FileSystemChown3
+	utimens3      FileSystemUtimens3
+	rename3       FileSystemRename3
+	copyFileRange FileSystemCopyFileRange
+	lseek         FileSystemLseek
+	fallocate     FileSystemFallocate
+	flock         FileSystemFlock
+}
+
+func resolveOps(fsop FileSystemInterface) (o hostOps) {
+	o.openEx, _ = fsop.(FileSystemOpenEx)
+	o.getpath, _ = fsop.(FileSystemGetpath)
+	o.chflags, _ = fsop.(FileSystemChflags)
+	o.setcrtime, _ = fsop.(FileSystemSetcrtime)
+	o.setchgtime, _ = fsop.(FileSystemSetchgtime)
+	o.chmod3, _ = fsop.(FileSystemChmod3)
+	o.chown3, _ = fsop.(FileSystemChown3)
+	o.utimens3, _ = fsop.(FileSystemUtimens3)
+	o.rename3, _ = fsop.(FileSystemRename3)
+	o.copyFileRange, _ = fsop.(FileSystemCopyFileRange)
+	o.lseek, _ = fsop.(FileSystemLseek)
+	o.fallocate, _ = fsop.(FileSystemFallocate)
+	o.flock, _ = fsop.(FileSystemFlock)
+	return
+}
+
 func hostGetattr(path0 *c_char, stat0 *c_fuse_stat_t, fi0 *c_struct_fuse_file_info) (errc0 c_int) {
 	defer recoverAsErrno(&errc0)
 	fsop := hostHandleGet(c_fuse_get_context().private_data).fsop
@@ -151,10 +188,10 @@ func hostSymlink(target0 *c_char, newpath0 *c_char) (errc0 c_int) {
 
 func hostRename(oldpath0 *c_char, newpath0 *c_char, flags c_uint32_t) (errc0 c_int) {
 	defer recoverAsErrno(&errc0)
-	fsop := hostHandleGet(c_fuse_get_context().private_data).fsop
+	host := hostHandleGet(c_fuse_get_context().private_data)
 	oldpath, newpath := c_GoString(oldpath0), c_GoString(newpath0)
-	intf, ok := fsop.(FileSystemRename3)
-	if ok {
+	intf := host.ops.rename3
+	if nil != intf {
 		errc := intf.Rename3(oldpath, newpath, uint32(flags))
 		return c_int(errc)
 	} else {
@@ -162,7 +199,7 @@ func hostRename(oldpath0 *c_char, newpath0 *c_char, flags c_uint32_t) (errc0 c_i
 			// man 2 rename: EINVAL when "the filesystem does not support one of the flags"
 			return -c_int(EINVAL)
 		}
-		errc := fsop.Rename(oldpath, newpath)
+		errc := host.fsop.Rename(oldpath, newpath)
 		return c_int(errc)
 	}
 }
@@ -177,10 +214,10 @@ func hostLink(oldpath0 *c_char, newpath0 *c_char) (errc0 c_int) {
 
 func hostChmod(path0 *c_char, mode0 c_fuse_mode_t, fi0 *c_struct_fuse_file_info) (errc0 c_int) {
 	defer recoverAsErrno(&errc0)
-	fsop := hostHandleGet(c_fuse_get_context().private_data).fsop
+	host := hostHandleGet(c_fuse_get_context().private_data)
 	path := c_GoString(path0)
-	intf, ok := fsop.(FileSystemChmod3)
-	if ok {
+	intf := host.ops.chmod3
+	if nil != intf {
 		fifh := ^uint64(0)
 		if nil != fi0 {
 			fifh = uint64(fi0.fh)
@@ -188,17 +225,17 @@ func hostChmod(path0 *c_char, mode0 c_fuse_mode_t, fi0 *c_struct_fuse_file_info)
 		errc := intf.Chmod3(path, uint32(mode0), fifh)
 		return c_int(errc)
 	} else {
-		errc := fsop.Chmod(path, uint32(mode0))
+		errc := host.fsop.Chmod(path, uint32(mode0))
 		return c_int(errc)
 	}
 }
 
 func hostChown(path0 *c_char, uid0 c_fuse_uid_t, gid0 c_fuse_gid_t, fi0 *c_struct_fuse_file_info) (errc0 c_int) {
 	defer recoverAsErrno(&errc0)
-	fsop := hostHandleGet(c_fuse_get_context().private_data).fsop
+	host := hostHandleGet(c_fuse_get_context().private_data)
 	path := c_GoString(path0)
-	intf, ok := fsop.(FileSystemChown3)
-	if ok {
+	intf := host.ops.chown3
+	if nil != intf {
 		fifh := ^uint64(0)
 		if nil != fi0 {
 			fifh = uint64(fi0.fh)
@@ -206,7 +243,7 @@ func hostChown(path0 *c_char, uid0 c_fuse_uid_t, gid0 c_fuse_gid_t, fi0 *c_struc
 		errc := intf.Chown3(path, uint32(uid0), uint32(gid0), fifh)
 		return c_int(errc)
 	} else {
-		errc := fsop.Chown(path, uint32(uid0), uint32(gid0))
+		errc := host.fsop.Chown(path, uint32(uid0), uint32(gid0))
 		return c_int(errc)
 	}
 }
@@ -225,10 +262,10 @@ func hostTruncate(path0 *c_char, size0 c_fuse_off_t, fi0 *c_struct_fuse_file_inf
 
 func hostOpen(path0 *c_char, fi0 *c_struct_fuse_file_info) (errc0 c_int) {
 	defer recoverAsErrno(&errc0)
-	fsop := hostHandleGet(c_fuse_get_context().private_data).fsop
+	host := hostHandleGet(c_fuse_get_context().private_data)
 	path := c_GoString(path0)
-	intf, ok := fsop.(FileSystemOpenEx)
-	if ok {
+	intf := host.ops.openEx
+	if nil != intf {
 		fi := FileInfo_t{Flags: int(fi0.flags)}
 		errc := intf.OpenEx(path, &fi)
 		c_hostAsgnCfileinfo(fi0,
@@ -238,7 +275,7 @@ func hostOpen(path0 *c_char, fi0 *c_struct_fuse_file_info) (errc0 c_int) {
 			c_uint64_t(fi.Fh))
 		return c_int(errc)
 	} else {
-		errc, rslt := fsop.Open(path, int(fi0.flags))
+		errc, rslt := host.fsop.Open(path, int(fi0.flags))
 		fi0.fh = c_uint64_t(rslt)
 		return c_int(errc)
 	}
@@ -426,9 +463,8 @@ func hostCopyFileRange(pathIn0 *c_char, fiIn0 *c_struct_fuse_file_info, offIn0 c
 	pathOut0 *c_char, fiOut0 *c_struct_fuse_file_info, offOut0 c_fuse_off_t,
 	size0 c_size_t, flags0 c_int) (nbyt0 c_fuse_off_t) {
 	defer recoverAsErrno64(&nbyt0)
-	fsop := hostHandleGet(c_fuse_get_context().private_data).fsop
-	intf, ok := fsop.(FileSystemCopyFileRange)
-	if !ok {
+	intf := hostHandleGet(c_fuse_get_context().private_data).ops.copyFileRange
+	if nil == intf {
 		return -c_fuse_off_t(ENOSYS)
 	}
 	pathIn, pathOut := c_GoString(pathIn0), c_GoString(pathOut0)
@@ -447,9 +483,8 @@ func hostCopyFileRange(pathIn0 *c_char, fiIn0 *c_struct_fuse_file_info, offIn0 c
 func hostLseek(path0 *c_char, off0 c_fuse_off_t, whence0 c_int,
 	fi0 *c_struct_fuse_file_info) (rslt0 c_fuse_off_t) {
 	defer recoverAsErrno64(&rslt0)
-	fsop := hostHandleGet(c_fuse_get_context().private_data).fsop
-	intf, ok := fsop.(FileSystemLseek)
-	if !ok {
+	intf := hostHandleGet(c_fuse_get_context().private_data).ops.lseek
+	if nil == intf {
 		return -c_fuse_off_t(ENOSYS)
 	}
 	path := c_GoString(path0)
@@ -464,9 +499,8 @@ func hostLseek(path0 *c_char, off0 c_fuse_off_t, whence0 c_int,
 func hostFallocate(path0 *c_char, mode0 c_int, off0 c_fuse_off_t, length0 c_fuse_off_t,
 	fi0 *c_struct_fuse_file_info) (errc0 c_int) {
 	defer recoverAsErrno(&errc0)
-	fsop := hostHandleGet(c_fuse_get_context().private_data).fsop
-	intf, ok := fsop.(FileSystemFallocate)
-	if !ok {
+	intf := hostHandleGet(c_fuse_get_context().private_data).ops.fallocate
+	if nil == intf {
 		return -c_int(ENOSYS)
 	}
 	path := c_GoString(path0)
@@ -478,19 +512,10 @@ func hostFallocate(path0 *c_char, mode0 c_int, off0 c_fuse_off_t, length0 c_fuse
 	return c_int(errc)
 }
 
-// hostHasFlock reports whether the file system implements FileSystemFlock, so
-// that the FUSE_CAP_FLOCK_LOCKS capability can be negotiated (the kernel only
-// forwards flock requests when it is).
-func hostHasFlock(fsop FileSystemInterface) bool {
-	_, ok := fsop.(FileSystemFlock)
-	return ok
-}
-
 func hostFlock(path0 *c_char, fi0 *c_struct_fuse_file_info, op0 c_int) (errc0 c_int) {
 	defer recoverAsErrno(&errc0)
-	fsop := hostHandleGet(c_fuse_get_context().private_data).fsop
-	intf, ok := fsop.(FileSystemFlock)
-	if !ok {
+	intf := hostHandleGet(c_fuse_get_context().private_data).ops.flock
+	if nil == intf {
 		return -c_int(ENOSYS)
 	}
 	path := c_GoString(path0)
@@ -512,14 +537,14 @@ func hostAccess(path0 *c_char, mask0 c_int) (errc0 c_int) {
 
 func hostCreate(path0 *c_char, mode0 c_fuse_mode_t, fi0 *c_struct_fuse_file_info) (errc0 c_int) {
 	defer recoverAsErrno(&errc0)
-	fsop := hostHandleGet(c_fuse_get_context().private_data).fsop
+	host := hostHandleGet(c_fuse_get_context().private_data)
 	path := c_GoString(path0)
-	intf, ok := fsop.(FileSystemOpenEx)
-	if ok {
+	intf := host.ops.openEx
+	if nil != intf {
 		fi := FileInfo_t{Flags: int(fi0.flags)}
 		errc := intf.CreateEx(path, uint32(mode0), &fi)
 		if -ENOSYS == errc {
-			errc = fsop.Mknod(path, S_IFREG|uint32(mode0), 0)
+			errc = host.fsop.Mknod(path, S_IFREG|uint32(mode0), 0)
 			if 0 == errc {
 				errc = intf.OpenEx(path, &fi)
 			}
@@ -531,11 +556,11 @@ func hostCreate(path0 *c_char, mode0 c_fuse_mode_t, fi0 *c_struct_fuse_file_info
 			c_uint64_t(fi.Fh))
 		return c_int(errc)
 	} else {
-		errc, rslt := fsop.Create(path, int(fi0.flags), uint32(mode0))
+		errc, rslt := host.fsop.Create(path, int(fi0.flags), uint32(mode0))
 		if -ENOSYS == errc {
-			errc = fsop.Mknod(path, S_IFREG|uint32(mode0), 0)
+			errc = host.fsop.Mknod(path, S_IFREG|uint32(mode0), 0)
 			if 0 == errc {
-				errc, rslt = fsop.Open(path, int(fi0.flags))
+				errc, rslt = host.fsop.Open(path, int(fi0.flags))
 			}
 		}
 		fi0.fh = c_uint64_t(rslt)
@@ -564,7 +589,7 @@ func hostFgetattr(path0 *c_char, stat0 *c_fuse_stat_t,
 
 func hostUtimens(path0 *c_char, tmsp0 *c_fuse_timespec_t, fi0 *c_struct_fuse_file_info) (errc0 c_int) {
 	defer recoverAsErrno(&errc0)
-	fsop := hostHandleGet(c_fuse_get_context().private_data).fsop
+	host := hostHandleGet(c_fuse_get_context().private_data)
 	path := c_GoString(path0)
 	tmsp := [2]Timespec{}
 	if nil == tmsp0 {
@@ -578,8 +603,8 @@ func hostUtimens(path0 *c_char, tmsp0 *c_fuse_timespec_t, fi0 *c_struct_fuse_fil
 		copyFusetimespecFromCtimespec(&tmsp[0], &tmsa[0])
 		copyFusetimespecFromCtimespec(&tmsp[1], &tmsa[1])
 	}
-	intf, ok := fsop.(FileSystemUtimens3)
-	if ok {
+	intf := host.ops.utimens3
+	if nil != intf {
 		fifh := ^uint64(0)
 		if nil != fi0 {
 			fifh = uint64(fi0.fh)
@@ -587,7 +612,7 @@ func hostUtimens(path0 *c_char, tmsp0 *c_fuse_timespec_t, fi0 *c_struct_fuse_fil
 		errc := intf.Utimens3(path, tmsp[:], fifh)
 		return c_int(errc)
 	} else {
-		errc := fsop.Utimens(path, tmsp[:])
+		errc := host.fsop.Utimens(path, tmsp[:])
 		return c_int(errc)
 	}
 }
@@ -595,9 +620,8 @@ func hostUtimens(path0 *c_char, tmsp0 *c_fuse_timespec_t, fi0 *c_struct_fuse_fil
 func hostGetpath(path0 *c_char, buff0 *c_char, size0 c_size_t,
 	fi0 *c_struct_fuse_file_info) (errc0 c_int) {
 	defer recoverAsErrno(&errc0)
-	fsop := hostHandleGet(c_fuse_get_context().private_data).fsop
-	intf, ok := fsop.(FileSystemGetpath)
-	if !ok {
+	intf := hostHandleGet(c_fuse_get_context().private_data).ops.getpath
+	if nil == intf {
 		return -c_int(ENOSYS)
 	}
 	path := c_GoString(path0)
@@ -619,9 +643,8 @@ func hostGetpath(path0 *c_char, buff0 *c_char, size0 c_size_t,
 
 func hostSetchgtime(path0 *c_char, tmsp0 *c_fuse_timespec_t) (errc0 c_int) {
 	defer recoverAsErrno(&errc0)
-	fsop := hostHandleGet(c_fuse_get_context().private_data).fsop
-	intf, ok := fsop.(FileSystemSetchgtime)
-	if !ok {
+	intf := hostHandleGet(c_fuse_get_context().private_data).ops.setchgtime
+	if nil == intf {
 		// say we did it!
 		return 0
 	}
@@ -634,9 +657,8 @@ func hostSetchgtime(path0 *c_char, tmsp0 *c_fuse_timespec_t) (errc0 c_int) {
 
 func hostSetcrtime(path0 *c_char, tmsp0 *c_fuse_timespec_t) (errc0 c_int) {
 	defer recoverAsErrno(&errc0)
-	fsop := hostHandleGet(c_fuse_get_context().private_data).fsop
-	intf, ok := fsop.(FileSystemSetcrtime)
-	if !ok {
+	intf := hostHandleGet(c_fuse_get_context().private_data).ops.setcrtime
+	if nil == intf {
 		// say we did it!
 		return 0
 	}
@@ -649,9 +671,8 @@ func hostSetcrtime(path0 *c_char, tmsp0 *c_fuse_timespec_t) (errc0 c_int) {
 
 func hostChflags(path0 *c_char, flags c_uint32_t) (errc0 c_int) {
 	defer recoverAsErrno(&errc0)
-	fsop := hostHandleGet(c_fuse_get_context().private_data).fsop
-	intf, ok := fsop.(FileSystemChflags)
-	if !ok {
+	intf := hostHandleGet(c_fuse_get_context().private_data).ops.chflags
+	if nil == intf {
 		// say we did it!
 		return 0
 	}

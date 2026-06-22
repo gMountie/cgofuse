@@ -1001,7 +1001,7 @@ func c_hostAsgnCconninfo(conn *c_struct_fuse_conn_info, host *FileSystemHost) {
 	o.capWritebackCache = C.bool(host.capWritebackCache)
 	o.capExplicitInvalData = C.bool(host.capExplicitInvalData)
 	o.capCacheSymlinks = C.bool(host.capCacheSymlinks)
-	o.capFlockLocks = C.bool(hostHasFlock(host.fsop))
+	o.capFlockLocks = C.bool(nil != host.ops.flock)
 	o.maxReadahead = C.unsigned(host.maxReadahead)
 	o.maxBackground = C.unsigned(host.maxBackground)
 	o.congestionThreshold = C.unsigned(host.congestionThreshold)

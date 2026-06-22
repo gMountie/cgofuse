@@ -34,6 +34,10 @@ type FileSystemHost struct {
 	fuse *c_struct_fuse
 	mntp string
 
+	// ops holds the optional interfaces fsop implements, resolved once at
+	// construction (see resolveOps) instead of per operation.
+	ops hostOps
+
 	capCaseInsensitive   bool
 	capReaddirPlus       bool
 	capDeleteAccess      bool

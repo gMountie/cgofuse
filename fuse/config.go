@@ -16,6 +16,7 @@ package fuse
 func NewFileSystemHost(fsop FileSystemInterface) *FileSystemHost {
 	host := &FileSystemHost{}
 	host.fsop = fsop
+	host.ops = resolveOps(fsop)
 	// FUSE3 enables auto cache invalidation by default; preserve that unless
 	// the file system explicitly opts out via SetCapAutoInvalData.
 	host.capAutoInvalData = true
