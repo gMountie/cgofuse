@@ -412,6 +412,17 @@ type FileSystemFallocate interface {
 	Fallocate(path string, mode int, off int64, length int64, fh uint64) int
 }
 
+// FileSystemFlock is the interface that wraps the Flock method.
+//
+// Flock applies or removes a BSD advisory lock (flock(2)) on the open file
+// identified by path/fh; op is one of LOCK_SH, LOCK_EX or LOCK_UN, optionally
+// or'ed with LOCK_NB. A file system that implements this interface causes
+// cgofuse to negotiate FUSE_CAP_FLOCK_LOCKS so the kernel forwards flock
+// requests. It returns 0 or a negative error code. [FUSE3 only]
+type FileSystemFlock interface {
+	Flock(path string, op int, fh uint64) int
+}
+
 // Error encapsulates a FUSE error code. In some rare circumstances it is useful
 // to signal an error to the FUSE layer by boxing the error code using Error and
 // calling panic(). The FUSE layer will recover and report the boxed error code

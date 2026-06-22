@@ -425,6 +425,7 @@ extern fuse_off_t go_hostCopyFileRange(char *path_in, struct fuse_file_info *fi_
 extern fuse_off_t go_hostLseek(char *path, fuse_off_t off, int whence, struct fuse_file_info *fi);
 extern int go_hostFallocate(char *path, int mode, fuse_off_t off, fuse_off_t length,
 	struct fuse_file_info *fi);
+extern int go_hostFlock(char *path, struct fuse_file_info *fi, int op);
 
 static inline void hostAsgnCconninfo(struct fuse_conn_info *conn,
 	bool capCaseInsensitive,
@@ -434,6 +435,8 @@ static inline void hostAsgnCconninfo(struct fuse_conn_info *conn,
 	bool capAutoInvalData,
 	bool capWritebackCache,
 	bool capExplicitInvalData,
+	bool capCacheSymlinks,
+	bool capFlockLocks,
 	unsigned maxReadahead,
 	unsigned maxBackground,
 	unsigned congestionThreshold)
@@ -492,6 +495,21 @@ static inline void hostAsgnCconninfo(struct fuse_conn_info *conn,
 		conn->want |= conn->capable & FUSE_CAP_EXPLICIT_INVAL_DATA;
 	else
 		conn->want &= ~FUSE_CAP_EXPLICIT_INVAL_DATA;
+#endif
+#if defined(FUSE_CAP_CACHE_SYMLINKS)
+	// Opt-in: the kernel caches symlink targets, avoiding repeated Readlink.
+	if (capCacheSymlinks)
+		conn->want |= conn->capable & FUSE_CAP_CACHE_SYMLINKS;
+	else
+		conn->want &= ~FUSE_CAP_CACHE_SYMLINKS;
+#endif
+#if defined(FUSE_CAP_FLOCK_LOCKS)
+	// Enabled when the file system implements FileSystemFlock; the kernel only
+	// forwards flock requests when this capability is negotiated.
+	if (capFlockLocks)
+		conn->want |= conn->capable & FUSE_CAP_FLOCK_LOCKS;
+	else
+		conn->want &= ~FUSE_CAP_FLOCK_LOCKS;
 #endif
 	// Tuning knobs; 0 leaves the libfuse/kernel default in place.
 	if (0 != maxReadahead)
@@ -767,6 +785,7 @@ static int hostMount(int argc, char *argv[], void *data)
 #endif
 #if FUSE_USE_VERSION >= 30
 		.fallocate = (int (*)(const char *, int, off_t, off_t, struct fuse_file_info *))go_hostFallocate,
+		.flock = (int (*)(const char *, struct fuse_file_info *, int))go_hostFlock,
 #endif
 	};
 #if defined(_WIN32)
@@ -983,11 +1002,13 @@ func c_hostAsgnCconninfo(conn *c_struct_fuse_conn_info,
 	capAutoInvalData c_bool,
 	capWritebackCache c_bool,
 	capExplicitInvalData c_bool,
+	capCacheSymlinks c_bool,
+	capFlockLocks c_bool,
 	maxReadahead c_unsigned,
 	maxBackground c_unsigned,
 	congestionThreshold c_unsigned) {
 	C.hostAsgnCconninfo(conn, capCaseInsensitive, capReaddirPlus, capDeleteAccess, capOpenTrunc,
-		capAutoInvalData, capWritebackCache, capExplicitInvalData,
+		capAutoInvalData, capWritebackCache, capExplicitInvalData, capCacheSymlinks, capFlockLocks,
 		maxReadahead, maxBackground, congestionThreshold)
 }
 func c_hostAsgnCconfig(conf *c_struct_fuse_config,
@@ -1355,4 +1376,9 @@ func go_hostLseek(path0 *c_char, off0 c_fuse_off_t, whence0 c_int,
 func go_hostFallocate(path0 *c_char, mode0 c_int, off0 c_fuse_off_t, length0 c_fuse_off_t,
 	fi0 *c_struct_fuse_file_info) (errc0 c_int) {
 	return hostFallocate(path0, mode0, off0, length0, fi0)
+}
+
+//export go_hostFlock
+func go_hostFlock(path0 *c_char, fi0 *c_struct_fuse_file_info, op0 c_int) (errc0 c_int) {
+	return hostFlock(path0, fi0, op0)
 }

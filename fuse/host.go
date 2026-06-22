@@ -37,6 +37,7 @@ type FileSystemHost struct {
 	capAutoInvalData     bool
 	capWritebackCache    bool
 	capExplicitInvalData bool
+	capCacheSymlinks     bool
 	maxReadahead         int
 	maxBackground        int
 	congestionThreshold  int
@@ -512,6 +513,30 @@ func hostFallocate(path0 *c_char, mode0 c_int, off0 c_fuse_off_t, length0 c_fuse
 	return c_int(errc)
 }
 
+// hostHasFlock reports whether the file system implements FileSystemFlock, so
+// that the FUSE_CAP_FLOCK_LOCKS capability can be negotiated (the kernel only
+// forwards flock requests when it is).
+func hostHasFlock(fsop FileSystemInterface) bool {
+	_, ok := fsop.(FileSystemFlock)
+	return ok
+}
+
+func hostFlock(path0 *c_char, fi0 *c_struct_fuse_file_info, op0 c_int) (errc0 c_int) {
+	defer recoverAsErrno(&errc0)
+	fsop := hostHandleGet(c_fuse_get_context().private_data).fsop
+	intf, ok := fsop.(FileSystemFlock)
+	if !ok {
+		return -c_int(ENOSYS)
+	}
+	path := c_GoString(path0)
+	fifh := ^uint64(0)
+	if nil != fi0 {
+		fifh = uint64(fi0.fh)
+	}
+	errc := intf.Flock(path, int(op0), fifh)
+	return c_int(errc)
+}
+
 func hostInit(conn0 *c_struct_fuse_conn_info, conf0 *c_struct_fuse_config) (user_data unsafe.Pointer) {
 	defer func() {
 		recover()
@@ -528,6 +553,8 @@ func hostInit(conn0 *c_struct_fuse_conn_info, conf0 *c_struct_fuse_config) (user
 		c_bool(host.capAutoInvalData),
 		c_bool(host.capWritebackCache),
 		c_bool(host.capExplicitInvalData),
+		c_bool(host.capCacheSymlinks),
+		c_bool(hostHasFlock(host.fsop)),
 		c_unsigned(host.maxReadahead),
 		c_unsigned(host.maxBackground),
 		c_unsigned(host.congestionThreshold))
@@ -774,6 +801,14 @@ func (host *FileSystemHost) SetCapWritebackCache(value bool) {
 // before Mount is called.
 func (host *FileSystemHost) SetCapExplicitInvalData(value bool) {
 	host.capExplicitInvalData = value
+}
+
+// SetCapCacheSymlinks enables kernel caching of symbolic link targets
+// [FUSE3 only], disabled by default. When enabled the kernel caches the target
+// returned by Readlink and avoids repeated Readlink calls. Must be set before
+// Mount is called.
+func (host *FileSystemHost) SetCapCacheSymlinks(value bool) {
+	host.capCacheSymlinks = value
 }
 
 // SetMaxReadahead sets the maximum readahead in bytes [FUSE3 only]. Zero (the

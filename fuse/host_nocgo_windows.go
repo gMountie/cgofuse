@@ -343,11 +343,14 @@ func c_hostAsgnCconninfo(conn *c_struct_fuse_conn_info,
 	capAutoInvalData c_bool,
 	capWritebackCache c_bool,
 	capExplicitInvalData c_bool,
+	capCacheSymlinks c_bool,
+	capFlockLocks c_bool,
 	maxReadahead c_unsigned,
 	maxBackground c_unsigned,
 	congestionThreshold c_unsigned) {
 	// WinFsp-FUSE does not expose these libfuse capabilities/tuning knobs.
 	_, _, _ = capAutoInvalData, capWritebackCache, capExplicitInvalData
+	_, _ = capCacheSymlinks, capFlockLocks
 	_, _, _ = maxReadahead, maxBackground, congestionThreshold
 	conn.want |= conn.capable & FSP_FUSE_CAP_STAT_EX
 	cgofuse_stat_ex = 0 != conn.want&FSP_FUSE_CAP_STAT_EX // hack!
