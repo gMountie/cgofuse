@@ -431,6 +431,14 @@ static inline void hostAsgnCconninfo(struct fuse_conn_info *conn,
 #if defined(__APPLE__)
 	if (capCaseInsensitive)
 		FUSE_ENABLE_CASE_INSENSITIVE(conn);
+#if defined(FUSE_CAP_AUTO_INVAL_DATA)
+	// Allow the file system to opt out of the kernel's Getattr-before-read
+	// cache revalidation (see the Linux/FreeBSD branch below).
+	if (capAutoInvalData)
+		conn->want |= conn->capable & FUSE_CAP_AUTO_INVAL_DATA;
+	else
+		conn->want &= ~FUSE_CAP_AUTO_INVAL_DATA;
+#endif
 #elif defined(__NetBSD__) || defined(__OpenBSD__)
 #elif defined(__FreeBSD__) || defined(__linux__)
 #if FUSE_USE_VERSION >= 30
