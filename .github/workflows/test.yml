@@ -121,18 +121,12 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           go test -race -count=1 ./fuse
-          go test -race -tags=fuse3 -count=1 ./fuse
+          go test -race -tags=fuse2 -count=1 ./fuse
 
-      - name: Build packages with FUSE2
+      - name: Build packages (default; FUSE3 on Linux/FreeBSD, FUSE2 on Windows/macOS)
         run: |
           go build -v -o . ./...
           go build -tags=memfs3 -v -o memfs3${{ matrix.exe }} ./examples/memfs
-
-      - name: Build packages with FUSE3 (macOS)
-        if: runner.os == 'macOS'
-        run: |
-          go build -tags=fuse3 -v -o . ./...
-          go build -tags=fuse3,memfs3 -v -o memfs3${{ matrix.exe }} ./examples/memfs
 
       - name: Test file systems with FUSE2 (Windows)
         if: runner.os == 'Windows'
@@ -167,7 +161,7 @@ jobs:
           Start-Sleep 3
           Pop-Location
 
-      - name: Test file systems (Linux / macOS:disabled) with FUSE2
+      - name: Test file systems (Linux, default = FUSE3)
         if: runner.os == 'Linux' || (false && runner.os == 'macOS')
         run: |
           set -x
@@ -176,21 +170,21 @@ jobs:
 
           mkdir p mnt
 
-          sudo ./memfs -o allow_other,default_permissions,use_ino,attr_timeout=0 mnt &
+          sudo ./memfs -o allow_other,default_permissions,attr_timeout=0 mnt &
           sleep 3
           (cd mnt && sudo prove -fr ../secfs.test/fstest/fstest/tests)
           (cd mnt && ../secfs.test/tools/bin/fsx -N 10000 test xxxxxx)
           (cd mnt && ../secfs.test/tools/bin/fsx -e -N 1000 test xxxx)
           sudo umount mnt
 
-          sudo ./memfs3 -o allow_other,default_permissions,use_ino,attr_timeout=0 mnt &
+          sudo ./memfs3 -o allow_other,default_permissions,attr_timeout=0 mnt &
           sleep 3
           (cd mnt && sudo prove -fr ../secfs.test/fstest/fstest/tests)
           (cd mnt && ../secfs.test/tools/bin/fsx -N 10000 test xxxxxx)
           (cd mnt && ../secfs.test/tools/bin/fsx -e -N 1000 test xxxx)
           sudo umount mnt
 
-          sudo ./passthrough -o allow_other,default_permissions,use_ino,attr_timeout=0 p mnt &
+          sudo ./passthrough -o allow_other,default_permissions,attr_timeout=0 p mnt &
           sleep 3
           (cd mnt && sudo prove -fr ../secfs.test/fstest/fstest/tests)
           (cd mnt && ../secfs.test/tools/bin/fsx -N 10000 test xxxxxx)
@@ -199,18 +193,18 @@ jobs:
           rm -rf p
           rmdir mnt
 
-      - name: Build packages with FUSE3 (Linux)
+      - name: Build packages with FUSE2 (Linux)
         if: runner.os == 'Linux'
         run: |
-          go build -tags=fuse3 -v -o . ./...
-          go build -tags=fuse3,memfs3 -v -o memfs3${{ matrix.exe }} ./examples/memfs
+          go build -tags=fuse2 -v -o . ./...
+          go build -tags=fuse2,memfs3 -v -o memfs3${{ matrix.exe }} ./examples/memfs
 
-      - name: Test file systems with FUSE3 (Linux)
+      - name: Test file systems with FUSE2 (Linux)
         if: runner.os == 'Linux'
         run: |
           set -x
 
-          go test -tags=fuse3 -v -count=1 ./fuse
+          go test -tags=fuse2 -v -count=1 ./fuse
 
           mkdir p mnt
 

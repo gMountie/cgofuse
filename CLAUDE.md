@@ -21,18 +21,18 @@ There is no Makefile or task runner; use `go` directly. Most work happens in the
 `./fuse` package.
 
 ```bash
-# Build everything, FUSE2 (default), into the working dir
+# Build everything, default = FUSE3 on Linux/FreeBSD (FUSE2 on macOS/Windows)
 go build -v -o . ./...
 
-# Build with FUSE3 (Linux & FreeBSD only)
-go build -tags=fuse3 -v -o . ./...
+# Build FUSE2 explicitly (Linux & FreeBSD)
+go build -tags=fuse2 -v -o . ./...
 
 # memfs has an alternate FUSE3-style implementation behind a build tag
 go build -tags=memfs3 -o memfs3 ./examples/memfs
 
 # Unit tests (the only `go test`-runnable suite)
-go test -v -count=1 ./fuse
-go test -tags=fuse3 -v -count=1 ./fuse     # FUSE3 variant
+go test -v -count=1 ./fuse                 # default (FUSE3 on Linux/FreeBSD)
+go test -tags=fuse2 -v -count=1 ./fuse     # FUSE2 variant
 go test -run TestOptParse ./fuse           # single test
 ```
 

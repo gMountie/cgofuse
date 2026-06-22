@@ -16,14 +16,16 @@
 package fuse
 
 /*
-#cgo darwin,!fuse3 CFLAGS: -DFUSE_USE_VERSION=28 -D_FILE_OFFSET_BITS=64 -I/usr/local/include/osxfuse/fuse -I/usr/local/include/fuse
-#cgo darwin,fuse3 CFLAGS: -DFUSE_USE_VERSION=39 -D_FILE_OFFSET_BITS=64 -I/usr/local/include/fuse3
-#cgo freebsd,!fuse3 CFLAGS: -DFUSE_USE_VERSION=28 -D_FILE_OFFSET_BITS=64 -I/usr/local/include/fuse
-#cgo freebsd,fuse3 CFLAGS: -DFUSE_USE_VERSION=39 -D_FILE_OFFSET_BITS=64 -I/usr/local/include/fuse3
+// macOS uses FUSE2 only: macFUSE's FUSE3 is a darwin dialect (fuse_darwin_attr,
+// struct statfs, changed ops) that does not match the upstream libfuse3 wiring.
+#cgo darwin CFLAGS: -DFUSE_USE_VERSION=28 -D_FILE_OFFSET_BITS=64 -I/usr/local/include/osxfuse/fuse -I/usr/local/include/fuse
+// FUSE3 is the default; build with -tags=fuse2 for FUSE2.
+#cgo freebsd,!fuse2 CFLAGS: -DFUSE_USE_VERSION=39 -D_FILE_OFFSET_BITS=64 -I/usr/local/include/fuse3
+#cgo freebsd,fuse2 CFLAGS: -DFUSE_USE_VERSION=28 -D_FILE_OFFSET_BITS=64 -I/usr/local/include/fuse
 #cgo netbsd CFLAGS: -DFUSE_USE_VERSION=28 -D_FILE_OFFSET_BITS=64 -D_KERNTYPES
 #cgo openbsd CFLAGS: -DFUSE_USE_VERSION=28 -D_FILE_OFFSET_BITS=64
-#cgo linux,!fuse3 CFLAGS: -DFUSE_USE_VERSION=28 -D_FILE_OFFSET_BITS=64 -I/usr/include/fuse
-#cgo linux,fuse3 CFLAGS: -DFUSE_USE_VERSION=39 -D_FILE_OFFSET_BITS=64 -I/usr/include/fuse3
+#cgo linux,!fuse2 CFLAGS: -DFUSE_USE_VERSION=39 -D_FILE_OFFSET_BITS=64 -I/usr/include/fuse3
+#cgo linux,fuse2 CFLAGS: -DFUSE_USE_VERSION=28 -D_FILE_OFFSET_BITS=64 -I/usr/include/fuse
 #cgo linux LDFLAGS: -ldl
 #cgo windows CFLAGS: -DFUSE_USE_VERSION=28 -I/usr/local/include/winfsp
 	// Use `set CPATH=C:\Program Files (x86)\WinFsp\inc\fuse` on Windows.
@@ -176,23 +178,12 @@ static void *cgofuse_init_fuse(void)
 	const char *dylib_path = getenv("CGOFUSE_LIBFUSE_PATH");
 	if (0 != dylib_path)
 		h = dlopen(dylib_path, RTLD_NOW);
-#if FUSE_USE_VERSION < 30
 	if (0 == h)
-		h = dlopen("/usr/local/lib/libfuse.2.dylib", RTLD_NOW); // macFUSE >= v4
+		h = dlopen("/usr/local/lib/libfuse.2.dylib", RTLD_NOW); // MacFUSE/OSXFuse >= v4
 	if (0 == h)
-		h = dlopen("/usr/local/lib/libosxfuse.2.dylib", RTLD_NOW); // macFUSE < v4
+		h = dlopen("/usr/local/lib/libosxfuse.2.dylib", RTLD_NOW); // MacFUSE/OSXFuse < v4
 	if (0 == h)
-		h = dlopen("/usr/local/lib/libfuse-t.dylib", RTLD_NOW); // FUSE-T (FUSE2 API)
-#else
-	if (0 == h)
-		h = dlopen("/usr/local/lib/libfuse3.dylib", RTLD_NOW); // macFUSE libfuse3 (unversioned)
-	if (0 == h)
-		h = dlopen("/usr/local/lib/libfuse3.4.dylib", RTLD_NOW); // macFUSE libfuse 3.17+
-	if (0 == h)
-		h = dlopen("/usr/local/lib/libfuse3.3.dylib", RTLD_NOW); // macFUSE libfuse 3.0-3.16
-	if (0 == h)
-		h = dlopen("/usr/local/lib/libfuse-t.dylib", RTLD_NOW); // FUSE-T (libfuse3 fork)
-#endif
+		h = dlopen("/usr/local/lib/libfuse-t.dylib", RTLD_NOW); // FUSE-T
 #elif defined(__FreeBSD__)
 #if FUSE_USE_VERSION < 30
 	h = dlopen("libfuse.so.2", RTLD_NOW);

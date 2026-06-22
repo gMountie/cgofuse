@@ -26,7 +26,7 @@ command -v fio >/dev/null || { echo "fio not found"; exit 1; }
 [ -e /dev/fuse ] || { echo "/dev/fuse missing"; exit 1; }
 
 # variant label -> go build tags
-VARIANTS=("fuse2:" "fuse3:fuse3")
+VARIANTS=("fuse2:fuse2" "fuse3:")
 
 bin_for() { echo "$OUT/memfs_$1"; }
 

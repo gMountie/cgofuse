@@ -9,6 +9,8 @@ This is a fork of [winfsp/cgofuse](https://github.com/winfsp/cgofuse) maintained
 
 - Fall back through additional FUSE3 sonames when loading the library on Linux: `libfuse3.so.3` → `libfuse3.so.4` → `libfuse3.so`.
 
+- Make **FUSE3 the default** on Linux and FreeBSD; build with `-tags=fuse2` for FUSE2. macOS stays FUSE2: macFUSE's FUSE3 is a darwin-specific API dialect (`fuse_darwin_attr`, `struct statfs`, changed operations) that does not match the upstream libfuse3 wiring used here.
+
 - Add capability setters `FileSystemHost.SetCapAutoInvalData`, `SetCapWritebackCache`, `SetCapExplicitInvalData`, and `SetCapCacheSymlinks` to control FUSE3 kernel caching behavior.
 
 - Add connection tuning setters `FileSystemHost.SetMaxReadahead`, `SetMaxBackground`, and `SetCongestionThreshold`.

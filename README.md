@@ -60,24 +60,24 @@ details. For the canonical, upstream library please refer to
 
 **Linux**
 - Prerequisites: libfuse-dev, libfuse3-dev, gcc
-- Build **FUSE**:
+- Build (FUSE3 is the default):
     ```
     $ go install -v ./fuse ./examples/memfs ./examples/passthrough
     ```
-- Build **FUSE3**:
+- Build **FUSE2**:
     ```
-    $ go install -tags=fuse3 -v ./fuse ./examples/memfs ./examples/passthrough
+    $ go install -tags=fuse2 -v ./fuse ./examples/memfs ./examples/passthrough
     ```
 
 **FreeBSD**
 - Prerequisites: fusefs-libs, fusefs-libs3
-- Build **FUSE**:
+- Build (FUSE3 is the default):
     ```
     $ go install -v ./fuse ./examples/memfs ./examples/passthrough
     ```
-- Build **FUSE3**:
+- Build **FUSE2**:
     ```
-    $ go install -tags=fuse3 -v ./fuse ./examples/memfs ./examples/passthrough
+    $ go install -tags=fuse2 -v ./fuse ./examples/memfs ./examples/passthrough
     ```
 - Note: You may also need the following in order to run FUSE file system. Commands must be run as root.
     ```
