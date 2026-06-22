@@ -30,13 +30,18 @@ type FileSystemHost struct {
 	mntp string
 	sigc chan os.Signal
 
-	capCaseInsensitive bool
-	capReaddirPlus     bool
-	capDeleteAccess    bool
-	capOpenTrunc       bool
-	capAutoInvalData   bool
-	directIO           bool
-	useIno             bool
+	capCaseInsensitive   bool
+	capReaddirPlus       bool
+	capDeleteAccess      bool
+	capOpenTrunc         bool
+	capAutoInvalData     bool
+	capWritebackCache    bool
+	capExplicitInvalData bool
+	maxReadahead         int
+	maxBackground        int
+	congestionThreshold  int
+	directIO             bool
+	useIno               bool
 }
 
 const maxwidth = 1 << (30 + 10*(^uint(0)>>32&1))
@@ -451,7 +456,12 @@ func hostInit(conn0 *c_struct_fuse_conn_info, conf0 *c_struct_fuse_config) (user
 		c_bool(host.capReaddirPlus),
 		c_bool(host.capDeleteAccess),
 		c_bool(host.capOpenTrunc),
-		c_bool(host.capAutoInvalData))
+		c_bool(host.capAutoInvalData),
+		c_bool(host.capWritebackCache),
+		c_bool(host.capExplicitInvalData),
+		c_unsigned(host.maxReadahead),
+		c_unsigned(host.maxBackground),
+		c_unsigned(host.congestionThreshold))
 	c_hostAsgnCconfig(conf0,
 		c_bool(host.directIO),
 		c_bool(host.useIno))
@@ -679,6 +689,47 @@ func (host *FileSystemHost) SetCapAutoInvalData(value bool) {
 	host.capAutoInvalData = value
 }
 
+// SetCapWritebackCache enables the kernel writeback cache [FUSE3 only]. It is
+// disabled by default. When enabled the kernel buffers writes and may deliver
+// them to Write coalesced, larger, and out of order; the file system must not
+// rely on receiving each application write as a distinct call, and should let
+// the kernel own the file size and mtime. Must be set before Mount is called.
+func (host *FileSystemHost) SetCapWritebackCache(value bool) {
+	host.capWritebackCache = value
+}
+
+// SetCapExplicitInvalData makes the file system solely responsible for cache
+// invalidation [FUSE3 only], disabled by default. Together with
+// SetCapAutoInvalData(false) it stops the kernel revalidating on its own; the
+// file system must invalidate stale data itself (e.g. via Notify). Must be set
+// before Mount is called.
+func (host *FileSystemHost) SetCapExplicitInvalData(value bool) {
+	host.capExplicitInvalData = value
+}
+
+// SetMaxReadahead sets the maximum readahead in bytes [FUSE3 only]. Zero (the
+// default) leaves the libfuse/kernel default in place. Must be set before Mount
+// is called.
+func (host *FileSystemHost) SetMaxReadahead(value int) {
+	host.maxReadahead = value
+}
+
+// SetMaxBackground sets the maximum number of outstanding background requests
+// the kernel may have in flight [FUSE3 only]. Raising it can improve throughput
+// on high-latency transports. Zero (the default) leaves the libfuse default.
+// Must be set before Mount is called.
+func (host *FileSystemHost) SetMaxBackground(value int) {
+	host.maxBackground = value
+}
+
+// SetCongestionThreshold sets the kernel congestion threshold: the number of
+// pending background requests at which the kernel considers the file system
+// congested [FUSE3 only]. Zero (the default) leaves the libfuse default. Must be
+// set before Mount is called.
+func (host *FileSystemHost) SetCongestionThreshold(value int) {
+	host.congestionThreshold = value
+}
+
 // SetDirectIO causes the file system to disable page caching [FUSE3 only]. Must be set
 // before Mount is called.
 func (host *FileSystemHost) SetDirectIO(value bool) {
@@ -696,10 +747,10 @@ func (host *FileSystemHost) SetUseIno(value bool) {
 // Many of the mount options in opts are specific to the underlying FUSE implementation.
 // Some of the common options include:
 //
-//     -h   --help            print help
-//     -V   --version         print FUSE version
-//     -d   -o debug          enable FUSE debug output
-//     -s                     disable multi-threaded operation
+//	-h   --help            print help
+//	-V   --version         print FUSE version
+//	-d   -o debug          enable FUSE debug output
+//	-s                     disable multi-threaded operation
 //
 // Please refer to the individual FUSE implementation documentation for additional options.
 //
@@ -909,49 +960,48 @@ func optNormStr(opt string) string {
 //
 // For pointer to bool types:
 //
-//     -x                       Match -x without parameter.
-//     -foo --foo               As above for -foo or --foo.
-//     foo                      Match "-o foo".
-//     -x= -foo= --foo= foo=    Match option with parameter.
-//     -x=%VERB ... foo=%VERB   Match option with parameter of syntax.
-//                              Allowed verbs: d,o,x,X,v
-//                              - d,o,x,X: set to true if parameter non-0.
-//                              - v: set to true if parameter present.
+//	-x                       Match -x without parameter.
+//	-foo --foo               As above for -foo or --foo.
+//	foo                      Match "-o foo".
+//	-x= -foo= --foo= foo=    Match option with parameter.
+//	-x=%VERB ... foo=%VERB   Match option with parameter of syntax.
+//	                         Allowed verbs: d,o,x,X,v
+//	                         - d,o,x,X: set to true if parameter non-0.
+//	                         - v: set to true if parameter present.
 //
-//     The formats -x=, and -x=%v are equivalent.
+//	The formats -x=, and -x=%v are equivalent.
 //
 // For pointer to other types:
 //
-//     -x                       Match -x with parameter (-x=PARAM).
-//     -foo --foo               As above for -foo or --foo.
-//     foo                      Match "-o foo=PARAM".
-//     -x= -foo= --foo= foo=    Match option with parameter.
-//     -x=%VERB ... foo=%VERB   Match option with parameter of syntax.
-//                              Allowed verbs for pointer to int types: d,o,x,X,v
-//                              Allowed verbs for pointer to string types: s,v
+//	-x                       Match -x with parameter (-x=PARAM).
+//	-foo --foo               As above for -foo or --foo.
+//	foo                      Match "-o foo=PARAM".
+//	-x= -foo= --foo= foo=    Match option with parameter.
+//	-x=%VERB ... foo=%VERB   Match option with parameter of syntax.
+//	                         Allowed verbs for pointer to int types: d,o,x,X,v
+//	                         Allowed verbs for pointer to string types: s,v
 //
-//     The formats -x, -x=, and -x=%v are equivalent.
+//	The formats -x, -x=, and -x=%v are equivalent.
 //
 // For example:
 //
-//     var f bool
-//     var set_attr_timeout bool
-//     var attr_timeout int
-//     var umask uint32
-//     outargs, err := OptParse(args, "-f attr_timeout= attr_timeout umask=%o",
-//         &f, &set_attr_timeout, &attr_timeout, &umask)
+//	var f bool
+//	var set_attr_timeout bool
+//	var attr_timeout int
+//	var umask uint32
+//	outargs, err := OptParse(args, "-f attr_timeout= attr_timeout umask=%o",
+//	    &f, &set_attr_timeout, &attr_timeout, &umask)
 //
 // Will accept a command line of:
 //
-//     $ program -f -o attr_timeout=42,umask=077
+//	$ program -f -o attr_timeout=42,umask=077
 //
 // And will set variables as follows:
 //
-//     f == true
-//     set_attr_timeout == true
-//     attr_timeout == 42
-//     umask == 077
-//
+//	f == true
+//	set_attr_timeout == true
+//	attr_timeout == 42
+//	umask == 077
 func OptParse(args []string, format string, vals ...interface{}) (outargs []string, err error) {
 	if 0 == c_hostFuseInit() {
 		if "windows" == runtime.GOOS {

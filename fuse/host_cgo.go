@@ -426,19 +426,16 @@ static inline void hostAsgnCconninfo(struct fuse_conn_info *conn,
 	bool capReaddirPlus,
 	bool capDeleteAccess,
 	bool capOpenTrunc,
-	bool capAutoInvalData)
+	bool capAutoInvalData,
+	bool capWritebackCache,
+	bool capExplicitInvalData,
+	unsigned maxReadahead,
+	unsigned maxBackground,
+	unsigned congestionThreshold)
 {
 #if defined(__APPLE__)
 	if (capCaseInsensitive)
 		FUSE_ENABLE_CASE_INSENSITIVE(conn);
-#if defined(FUSE_CAP_AUTO_INVAL_DATA)
-	// Allow the file system to opt out of the kernel's Getattr-before-read
-	// cache revalidation (see the Linux/FreeBSD branch below).
-	if (capAutoInvalData)
-		conn->want |= conn->capable & FUSE_CAP_AUTO_INVAL_DATA;
-	else
-		conn->want &= ~FUSE_CAP_AUTO_INVAL_DATA;
-#endif
 #elif defined(__NetBSD__) || defined(__OpenBSD__)
 #elif defined(__FreeBSD__) || defined(__linux__)
 #if FUSE_USE_VERSION >= 30
@@ -453,14 +450,6 @@ static inline void hostAsgnCconninfo(struct fuse_conn_info *conn,
 		conn->want |= conn->capable & FUSE_CAP_ATOMIC_O_TRUNC;
 	else
 		conn->want &= ~FUSE_CAP_ATOMIC_O_TRUNC;
-#if defined(FUSE_CAP_AUTO_INVAL_DATA)
-	// FUSE_CAP_AUTO_INVAL_DATA is enabled by default in FUSE3 and makes the
-	// kernel Getattr-revalidate before reads. Allow the file system to opt out.
-	if (capAutoInvalData)
-		conn->want |= conn->capable & FUSE_CAP_AUTO_INVAL_DATA;
-	else
-		conn->want &= ~FUSE_CAP_AUTO_INVAL_DATA;
-#endif
 #elif defined(_WIN32)
 #if defined(FSP_FUSE_CAP_STAT_EX)
 	conn->want |= conn->capable & FSP_FUSE_CAP_STAT_EX;
@@ -472,6 +461,40 @@ static inline void hostAsgnCconninfo(struct fuse_conn_info *conn,
 		conn->want |= conn->capable & FSP_FUSE_CAP_READDIR_PLUS;
 	if (capDeleteAccess)
 		conn->want |= conn->capable & (1 << 24);//FSP_FUSE_CAP_DELETE_ACCESS
+#endif
+
+	// Capabilities and tuning common to libfuse platforms (macOS, FreeBSD, Linux).
+	// Each is guarded so it compiles to a no-op where the feature is absent.
+#if defined(__APPLE__) || defined(__FreeBSD__) || defined(__linux__)
+#if defined(FUSE_CAP_AUTO_INVAL_DATA)
+	// Enabled by default in FUSE3: the kernel Getattr-revalidates before reads.
+	if (capAutoInvalData)
+		conn->want |= conn->capable & FUSE_CAP_AUTO_INVAL_DATA;
+	else
+		conn->want &= ~FUSE_CAP_AUTO_INVAL_DATA;
+#endif
+#if defined(FUSE_CAP_WRITEBACK_CACHE)
+	// Opt-in: the kernel buffers and coalesces writes (changes write semantics).
+	if (capWritebackCache)
+		conn->want |= conn->capable & FUSE_CAP_WRITEBACK_CACHE;
+	else
+		conn->want &= ~FUSE_CAP_WRITEBACK_CACHE;
+#endif
+#if defined(FUSE_CAP_EXPLICIT_INVAL_DATA)
+	// Opt-in: only the file system invalidates cached data (pairs with
+	// disabling FUSE_CAP_AUTO_INVAL_DATA).
+	if (capExplicitInvalData)
+		conn->want |= conn->capable & FUSE_CAP_EXPLICIT_INVAL_DATA;
+	else
+		conn->want &= ~FUSE_CAP_EXPLICIT_INVAL_DATA;
+#endif
+	// Tuning knobs; 0 leaves the libfuse/kernel default in place.
+	if (0 != maxReadahead)
+		conn->max_readahead = maxReadahead;
+	if (0 != maxBackground)
+		conn->max_background = maxBackground;
+	if (0 != congestionThreshold)
+		conn->congestion_threshold = congestionThreshold;
 #endif
 }
 
@@ -942,8 +965,15 @@ func c_hostAsgnCconninfo(conn *c_struct_fuse_conn_info,
 	capReaddirPlus c_bool,
 	capDeleteAccess c_bool,
 	capOpenTrunc c_bool,
-	capAutoInvalData c_bool) {
-	C.hostAsgnCconninfo(conn, capCaseInsensitive, capReaddirPlus, capDeleteAccess, capOpenTrunc, capAutoInvalData)
+	capAutoInvalData c_bool,
+	capWritebackCache c_bool,
+	capExplicitInvalData c_bool,
+	maxReadahead c_unsigned,
+	maxBackground c_unsigned,
+	congestionThreshold c_unsigned) {
+	C.hostAsgnCconninfo(conn, capCaseInsensitive, capReaddirPlus, capDeleteAccess, capOpenTrunc,
+		capAutoInvalData, capWritebackCache, capExplicitInvalData,
+		maxReadahead, maxBackground, congestionThreshold)
 }
 func c_hostAsgnCconfig(conf *c_struct_fuse_config,
 	directIO c_bool,
