@@ -27,10 +27,7 @@ jobs:
             arch: amd64
             exe: .exe
             cgo: 0
-          - os: windows-latest
-            arch: 386
-            exe: .exe
-            cgo: 0
+          # Windows 386 (32-bit) is not a supported target for this fork.
           - os: ubuntu-latest
             arch: amd64
             cgo: 1
