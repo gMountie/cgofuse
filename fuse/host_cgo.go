@@ -886,17 +886,27 @@ func c_free(p unsafe.Pointer) {
 
 // hostHandleNew/Del/Get associate a *FileSystemHost with an opaque pointer that
 // is stored as the FUSE private_data and recovered in every operation callback.
-// A runtime/cgo.Handle is a small integer index backed by a lock-free table, so
-// the per-operation hostHandleGet avoids the global mutex the previous map-based
+// A runtime/cgo.Handle resolves the host through a lock-free table, so the
+// per-operation hostHandleGet avoids the global mutex the previous map-based
 // implementation took on every FUSE call. See host.go for the shared contract.
+//
+// A cgo.Handle is a small integer (1, 2, 3, ...), not a real address. It must
+// never live in an unsafe.Pointer-typed slot: a value below minLegalPointer
+// (4096) in a pointer slot fails the runtime's stack pointer adjustment with
+// "invalid pointer found on stack" (the invalidptr check is on by default).
+// So the handle is boxed in a C allocation and private_data stays a genuine
+// pointer; the handle itself only ever travels as a uintptr.
 func hostHandleNew(host *FileSystemHost) unsafe.Pointer {
-	return unsafe.Pointer(cgo.NewHandle(host))
+	p := c_malloc(c_size_t(unsafe.Sizeof(uintptr(0))))
+	*(*uintptr)(p) = uintptr(cgo.NewHandle(host))
+	return p
 }
 func hostHandleDel(p unsafe.Pointer) {
-	cgo.Handle(uintptr(p)).Delete()
+	cgo.Handle(*(*uintptr)(p)).Delete()
+	c_free(p)
 }
 func hostHandleGet(p unsafe.Pointer) *FileSystemHost {
-	return cgo.Handle(uintptr(p)).Value().(*FileSystemHost)
+	return cgo.Handle(*(*uintptr)(p)).Value().(*FileSystemHost)
 }
 
 func c_fuse_get_context() *c_struct_fuse_context {
