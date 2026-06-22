@@ -105,4 +105,4 @@ func (self *Memfs) Utimens3(path string, tmsp []fuse.Timespec, fh uint64) (errc 
 var _ fuse.FileSystemRename3 = (*Memfs)(nil)
 var _ fuse.FileSystemChmod3 = (*Memfs)(nil)
 var _ fuse.FileSystemChown3 = (*Memfs)(nil)
-var _ fuse.FileSystemRename3 = (*Memfs)(nil)
+var _ fuse.FileSystemUtimens3 = (*Memfs)(nil)

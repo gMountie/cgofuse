@@ -631,6 +631,8 @@ func NewMemfs() *Memfs {
 var _ fuse.FileSystemChflags = (*Memfs)(nil)
 var _ fuse.FileSystemSetcrtime = (*Memfs)(nil)
 var _ fuse.FileSystemSetchgtime = (*Memfs)(nil)
+var _ fuse.FileSystemCopyFileRange = (*Memfs)(nil)
+var _ fuse.FileSystemFallocate = (*Memfs)(nil)
 
 func main() {
 	memfs := NewMemfs()
