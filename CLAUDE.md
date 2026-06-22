@@ -11,8 +11,9 @@ module, `go 1.26`, no third-party dependencies. The only importable package is
 `./fuse`; `./examples/...` are runnable demo file systems.
 
 This checkout lives inside the `~/git/gMountie` org container as a dependency of
-gMountie. It tracks upstream `winfsp/cgofuse`; treat it as vendored upstream
-unless you are deliberately forking — keep changes minimal and upstream-shaped.
+gMountie. It is a **fork** of upstream `winfsp/cgofuse` (see `Changelog.md` for
+the gMountie-specific additions). This is the project's own fork and may diverge
+freely from upstream — there is no need to keep changes upstream-shaped.
 
 ## Build & test
 
@@ -59,15 +60,21 @@ sometimes the shared dispatch).
   `FileInfo_t`, `Lock_t`), the `Error` errno type, and the optional capability
   interfaces a FS may additionally implement: `FileSystemOpenEx`,
   `FileSystemGetpath`, `FileSystemChflags`, `FileSystemSetcrtime`,
-  `FileSystemSetchgtime`, and the FUSE3-only `FileSystemChmod3` / `Chown3` /
-  `Utimens3` / `Rename3`. The host type-asserts for these at mount time.
+  `FileSystemSetchgtime`, the FUSE3-only `FileSystemChmod3` / `Chown3` /
+  `Utimens3` / `Rename3`, the fork's FUSE3 operations
+  `FileSystemCopyFileRange` / `FileSystemLseek` / `FileSystemFallocate`, and
+  `FileSystemFlock` (advisory locking). The host type-asserts for these at mount
+  time.
 - `fsop_cgo.go` (`//go:build cgo`) and `fsop_nocgo_windows.go`
   (`//go:build !cgo && windows`) — provide the platform errno constants
   (`E*`) and flag values referenced by `fsop.go`.
 
 **Host layer (the bridge to the native FUSE engine):**
 - `host.go` — shared. `FileSystemHost`, `NewFileSystemHost`, the `SetCap*` /
-  `SetDirectIO` / `SetUseIno` configuration setters, `Mount` / `Unmount` /
+  `SetDirectIO` / `SetUseIno` configuration setters (the fork adds
+  `SetCapAutoInvalData` / `SetCapWritebackCache` / `SetCapExplicitInvalData` /
+  `SetCapCacheSymlinks` plus connection tuning `SetMaxReadahead` /
+  `SetMaxBackground` / `SetCongestionThreshold`), `Mount` / `Unmount` /
   `Notify`, `Getcontext`, and `OptParse` (a getopt-style `-o` option parser).
   Crucially it holds the `host*` callback functions (e.g. `hostGetattr`,
   `hostRead`, `hostReaddir`) that translate a native FUSE call into a Go
@@ -77,7 +84,9 @@ sometimes the shared dispatch).
   preamble sets per-platform `CFLAGS` selecting `FUSE_USE_VERSION` 28 (FUSE2) or
   39 (FUSE3). **It does not link libfuse at build time** — it `dlopen`s the FUSE
   library at runtime (hence `LDFLAGS: -ldl`), so the binary builds without the
-  shared library present and picks it up when mounting.
+  shared library present and picks it up when mounting. On Linux the FUSE3
+  loader tries sonames in order: `libfuse3.so.3` → `libfuse3.so.4` →
+  `libfuse3.so` (this fork added the `.so.4` and unversioned fallbacks).
 - `host_nocgo_windows.go` (`//go:build !cgo && windows`) — a pure-Go
   reimplementation of the same bridge that loads and calls the WinFsp DLL via
   `syscall`, no cgo.

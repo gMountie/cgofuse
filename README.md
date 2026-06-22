@@ -19,6 +19,23 @@ _Cgofuse is a cross-platform FUSE library for Go. It is supported on multiple pl
 
 </div>
 
+## About this fork
+
+This repository is a fork of [winfsp/cgofuse](https://github.com/winfsp/cgofuse),
+maintained for the gMountie project.
+
+The original cgofuse library is the work of **Bill Zissimopoulos** and remains
+his copyright (`Copyright 2017-2022 Bill Zissimopoulos`). cgofuse is licensed
+under the **MIT license** — see [LICENSE.txt](LICENSE.txt). All credit for the
+original library belongs to its author and the upstream contributors; this fork
+makes no claim of authorship over cgofuse.
+
+This fork adds a handful of gMountie-specific enhancements (a lock-free handle
+table, additional FUSE3 operations and capability setters, and an extra libfuse3
+loader fallback) on top of upstream. See [Changelog.md](Changelog.md) for
+details. For the canonical, upstream library please refer to
+<https://github.com/winfsp/cgofuse>.
+
 ## How to build
 
 **Windows**
@@ -98,7 +115,7 @@ User mode file systems are expected to implement `fuse.FileSystemInterface`. To 
 
 The full documentation is available at GoDoc.org: [package fuse](https://godoc.org/github.com/winfsp/cgofuse/fuse)
 
-There are currently three example file systems:
+There are currently four example file systems:
 
 - [Hellofs](examples/hellofs/hellofs.go) is an extremely simple file system. Runs on all OS'es.
 - [Memfs](examples/memfs/memfs.go) is an in memory file system. Runs on all OS'es.

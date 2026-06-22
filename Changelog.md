@@ -1,6 +1,23 @@
 # Changelog
 
 
+**gMountie fork**
+
+This is a fork of [winfsp/cgofuse](https://github.com/winfsp/cgofuse) maintained for the gMountie project. The original cgofuse library is copyright Bill Zissimopoulos and licensed under the MIT license (see `LICENSE.txt`). The fork adds the following on top of upstream:
+
+- Replace the per-operation handle mutex with a lock-free handle table backed by `runtime/cgo.Handle` (the handle is boxed so it never occupies an `unsafe.Pointer` slot).
+
+- Fall back through additional FUSE3 sonames when loading the library on Linux: `libfuse3.so.3` → `libfuse3.so.4` → `libfuse3.so`.
+
+- Add capability setters `FileSystemHost.SetCapAutoInvalData`, `SetCapWritebackCache`, `SetCapExplicitInvalData`, and `SetCapCacheSymlinks` to control FUSE3 kernel caching behavior.
+
+- Add connection tuning setters `FileSystemHost.SetMaxReadahead`, `SetMaxBackground`, and `SetCongestionThreshold`.
+
+- Add the FUSE3 operations `CopyFileRange`, `Lseek`, and `Fallocate` (via the `FileSystemCopyFileRange`, `FileSystemLseek`, and `FileSystemFallocate` interfaces).
+
+- Add advisory locking via the `FileSystemFlock` interface (`Flock`).
+
+
 **v1.6.0**
 
 - Rename import path to `github.com/winfsp/cgofuse`.
