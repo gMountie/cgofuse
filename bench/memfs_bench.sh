@@ -14,8 +14,8 @@
 #
 set -euo pipefail
 
-ITERS="${ITERS:-3}"
-SIZE="${SIZE:-512M}"
+ITERS="${ITERS:-2}"
+SIZE="${SIZE:-256M}"
 OUT="${OUT:-$(mktemp -d)}"
 EXTRA_OPTS=("$@")
 
@@ -44,7 +44,7 @@ fio_job() {
 		# write bw KB/s = $48, write iops = $49
 		rbw=$7; riops=$8; wbw=$48; wiops=$49;
 		bw=(rbw>0?rbw:wbw); iops=(riops>0?riops:wiops);
-		printf "%.0f %.0f", bw/1024, iops
+		printf "%.0f %.0f\n", bw/1024, iops
 	}'
 }
 
@@ -63,11 +63,11 @@ bench_variant() {
 	done
 	mountpoint -q "$mnt" || { echo "mount failed for $label"; kill "$pid" 2>/dev/null || true; return 1; }
 
-	local sw=0 sr=0 srr=0
+	local sw=0 sr=0 srr=0 out
 	for _ in $(seq 1 "$ITERS"); do
-		read -r bw _ < <(fio_job "$mnt" seqwrite write 1M);    sw=$((sw+bw))
-		read -r bw _ < <(fio_job "$mnt" seqread  read  1M);    sr=$((sr+bw))
-		read -r _ io < <(fio_job "$mnt" randread randread 4k); srr=$((srr+io))
+		out=$(fio_job "$mnt" seqwrite write 1M);    sw=$((sw + ${out%% *}))
+		out=$(fio_job "$mnt" seqread  read  1M);    sr=$((sr + ${out%% *}))
+		out=$(fio_job "$mnt" randread randread 4k); srr=$((srr + ${out##* }))
 		rm -f "$mnt"/*
 	done
 
