@@ -196,6 +196,10 @@ static void *cgofuse_init_fuse(void)
 	h = dlopen("libfuse.so.2", RTLD_NOW);
 #else
 	h = dlopen("libfuse3.so.3", RTLD_NOW);
+	if (0 == h)
+		h = dlopen("libfuse3.so.4", RTLD_NOW); // some distros ship libfuse3 with this soname
+	if (0 == h)
+		h = dlopen("libfuse3.so", RTLD_NOW);   // dev/unversioned fallback
 #endif
 #endif
 	if (0 == h)
