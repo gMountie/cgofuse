@@ -19,6 +19,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"syscall"
 	"unsafe"
 )
@@ -26,9 +27,14 @@ import (
 // FileSystemHost is used to host a file system.
 type FileSystemHost struct {
 	fsop FileSystemInterface
+	sigc chan os.Signal
+
+	// hmu guards fuse and mntp, which are written by the FUSE loop thread
+	// (hostInit/hostDestroy) while caller threads read them via Unmount/Notify
+	// (the signal goroutine installed by Mount calls Unmount).
+	hmu  sync.Mutex
 	fuse *c_struct_fuse
 	mntp string
-	sigc chan os.Signal
 
 	capCaseInsensitive   bool
 	capReaddirPlus       bool
@@ -135,11 +141,13 @@ func hostReadlink(path0 *c_char, buff0 *c_char, size0 c_size_t) (errc0 c_int) {
 	fsop := hostHandleGet(c_fuse_get_context().private_data).fsop
 	path := c_GoString(path0)
 	errc, rslt := fsop.Readlink(path)
-	buff := (*[maxwidth]byte)(unsafe.Pointer(buff0))
-	copy(buff[:size0-1], rslt)
-	rlen := len(rslt)
-	if c_size_t(rlen) < size0 {
-		buff[rlen] = 0
+	if 0 < size0 { // size0 is unsigned; size0-1 would underflow when size0==0
+		buff := (*[maxwidth]byte)(unsafe.Pointer(buff0))
+		copy(buff[:size0-1], rslt)
+		rlen := len(rslt)
+		if c_size_t(rlen) < size0 {
+			buff[rlen] = 0
+		}
 	}
 	return c_int(errc)
 }
@@ -544,20 +552,10 @@ func hostInit(conn0 *c_struct_fuse_conn_info, conf0 *c_struct_fuse_config) (user
 	fctx := c_fuse_get_context()
 	user_data = fctx.private_data
 	host := hostHandleGet(user_data)
+	host.hmu.Lock()
 	host.fuse = fctx.fuse
-	c_hostAsgnCconninfo(conn0,
-		c_bool(host.capCaseInsensitive),
-		c_bool(host.capReaddirPlus),
-		c_bool(host.capDeleteAccess),
-		c_bool(host.capOpenTrunc),
-		c_bool(host.capAutoInvalData),
-		c_bool(host.capWritebackCache),
-		c_bool(host.capExplicitInvalData),
-		c_bool(host.capCacheSymlinks),
-		c_bool(hostHasFlock(host.fsop)),
-		c_unsigned(host.maxReadahead),
-		c_unsigned(host.maxBackground),
-		c_unsigned(host.congestionThreshold))
+	host.hmu.Unlock()
+	c_hostAsgnCconninfo(conn0, host)
 	c_hostAsgnCconfig(conf0,
 		c_bool(host.directIO),
 		c_bool(host.useIno))
@@ -580,7 +578,9 @@ func hostDestroy(user_data unsafe.Pointer) {
 	if nil != host.sigc {
 		signal.Stop(host.sigc)
 	}
+	host.hmu.Lock()
 	host.fuse = nil
+	host.hmu.Unlock()
 }
 
 func hostAccess(path0 *c_char, mask0 c_int) (errc0 c_int) {
@@ -687,11 +687,13 @@ func hostGetpath(path0 *c_char, buff0 *c_char, size0 c_size_t,
 		fifh = uint64(fi0.fh)
 	}
 	errc, rslt := intf.Getpath(path, fifh)
-	buff := (*[maxwidth]byte)(unsafe.Pointer(buff0))
-	copy(buff[:size0-1], rslt)
-	rlen := len(rslt)
-	if c_size_t(rlen) < size0 {
-		buff[rlen] = 0
+	if 0 < size0 { // size0 is unsigned; size0-1 would underflow when size0==0
+		buff := (*[maxwidth]byte)(unsafe.Pointer(buff0))
+		copy(buff[:size0-1], rslt)
+		rlen := len(rslt)
+		if c_size_t(rlen) < size0 {
+			buff[rlen] = 0
+		}
 	}
 	return c_int(errc)
 }
@@ -910,24 +912,30 @@ func (host *FileSystemHost) Mount(mountpoint string, opts []string) bool {
 	 * We need to determine the mountpoint that FUSE is going (to try) to use, so that we
 	 * can unmount later.
 	 */
+	var mntp string
 	if "" != mountpoint {
-		host.mntp = mountpoint
+		mntp = mountpoint
 	} else {
 		outargs, _ := OptParse(opts, "")
 		if 1 <= len(outargs) {
-			host.mntp = outargs[0]
+			mntp = outargs[0]
 		}
 	}
-	if "" != host.mntp {
-		if "windows" != runtime.GOOS || 2 != len(host.mntp) || ':' != host.mntp[1] {
-			abs, err := filepath.Abs(host.mntp)
+	if "" != mntp {
+		if "windows" != runtime.GOOS || 2 != len(mntp) || ':' != mntp[1] {
+			abs, err := filepath.Abs(mntp)
 			if nil == err {
-				host.mntp = abs
+				mntp = abs
 			}
 		}
 	}
+	host.hmu.Lock()
+	host.mntp = mntp
+	host.hmu.Unlock()
 	defer func() {
+		host.hmu.Lock()
 		host.mntp = ""
+		host.hmu.Unlock()
 	}()
 
 	/*
@@ -967,21 +975,28 @@ func (host *FileSystemHost) Mount(mountpoint string, opts []string) bool {
 // Unmount may be called at any time after the Init() method has been called
 // and before the Destroy() method has been called.
 func (host *FileSystemHost) Unmount() bool {
-	if nil == host.fuse {
+	host.hmu.Lock()
+	fuse := host.fuse
+	mntp0 := host.mntp
+	host.hmu.Unlock()
+	if nil == fuse {
 		return false
 	}
 	var mntp *c_char
-	if "" != host.mntp {
-		mntp = c_CString(host.mntp)
+	if "" != mntp0 {
+		mntp = c_CString(mntp0)
 		defer c_free(unsafe.Pointer(mntp))
 	}
-	return 0 != c_hostUnmount(host.fuse, mntp)
+	return 0 != c_hostUnmount(fuse, mntp)
 }
 
 // Notify notifies the operating system about a file change.
 // The action is a combination of the fuse.NOTIFY_* constants.
 func (host *FileSystemHost) Notify(path string, action uint32) bool {
-	if nil == host.fuse {
+	host.hmu.Lock()
+	fuse := host.fuse
+	host.hmu.Unlock()
+	if nil == fuse {
 		return false
 	}
 	if "" == path {
@@ -990,7 +1005,7 @@ func (host *FileSystemHost) Notify(path string, action uint32) bool {
 	var p *c_char
 	p = c_CString(path)
 	defer c_free(unsafe.Pointer(p))
-	return 0 != c_hostNotify(host.fuse, p, c_uint32_t(action))
+	return 0 != c_hostNotify(fuse, p, c_uint32_t(action))
 }
 
 // Getcontext gets information related to a file system operation.
@@ -1135,6 +1150,14 @@ func OptParse(args []string, format string, vals ...interface{}) (outargs []stri
 		opts = strings.Split(format, " ")
 	}
 
+	// Guard against a caller passing fewer vals than the format has options:
+	// indexing vals[i] below would otherwise panic with index-out-of-range,
+	// which the deferred recover does not convert (it only handles string
+	// panics) and would re-raise into the caller.
+	if len(vals) < len(opts) {
+		return nil, errors.New("OptParse: format has more options than values")
+	}
+
 	align := int(2 * unsafe.Sizeof(c_size_t(0))) // match malloc alignment (usually 8 or 16)
 
 	fuse_opts := make([]c_struct_fuse_opt, len(opts)+1)
@@ -1167,6 +1190,8 @@ func OptParse(args []string, format string, vals ...interface{}) (outargs []stri
 			templ = c_CString(optNormInt(opts[i], "ll"))
 		case *string:
 			templ = c_CString(optNormStr(opts[i]))
+		default:
+			return nil, errors.New("OptParse: unsupported value type for option " + opts[i])
 		}
 		defer c_free(unsafe.Pointer(templ))
 

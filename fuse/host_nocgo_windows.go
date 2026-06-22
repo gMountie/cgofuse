@@ -335,32 +335,18 @@ func c_fuse_opt_free_args(args *c_struct_fuse_args) {
 	fuse_opt_free_args.Call(uintptr(unsafe.Pointer(args)))
 }
 
-func c_hostAsgnCconninfo(conn *c_struct_fuse_conn_info,
-	capCaseInsensitive c_bool,
-	capReaddirPlus c_bool,
-	capDeleteAccess c_bool,
-	capOpenTrunc c_bool,
-	capAutoInvalData c_bool,
-	capWritebackCache c_bool,
-	capExplicitInvalData c_bool,
-	capCacheSymlinks c_bool,
-	capFlockLocks c_bool,
-	maxReadahead c_unsigned,
-	maxBackground c_unsigned,
-	congestionThreshold c_unsigned) {
-	// WinFsp-FUSE does not expose these libfuse capabilities/tuning knobs.
-	_, _, _ = capAutoInvalData, capWritebackCache, capExplicitInvalData
-	_, _ = capCacheSymlinks, capFlockLocks
-	_, _, _ = maxReadahead, maxBackground, congestionThreshold
+func c_hostAsgnCconninfo(conn *c_struct_fuse_conn_info, host *FileSystemHost) {
+	// WinFsp-FUSE exposes only these capabilities; the libfuse-only caps and
+	// the connection tuning knobs on host have no WinFsp equivalent.
 	conn.want |= conn.capable & FSP_FUSE_CAP_STAT_EX
 	cgofuse_stat_ex = 0 != conn.want&FSP_FUSE_CAP_STAT_EX // hack!
-	if capCaseInsensitive {
+	if host.capCaseInsensitive {
 		conn.want |= conn.capable & FSP_FUSE_CAP_CASE_INSENSITIVE
 	}
-	if capReaddirPlus {
+	if host.capReaddirPlus {
 		conn.want |= conn.capable & FSP_FUSE_CAP_READDIR_PLUS
 	}
-	if capDeleteAccess {
+	if host.capDeleteAccess {
 		conn.want |= conn.capable & FSP_FUSE_CAP_DELETE_ACCESS
 	}
 }

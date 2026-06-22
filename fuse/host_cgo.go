@@ -427,34 +427,31 @@ extern int go_hostFallocate(char *path, int mode, fuse_off_t off, fuse_off_t len
 	struct fuse_file_info *fi);
 extern int go_hostFlock(char *path, struct fuse_file_info *fi, int op);
 
-static inline void hostAsgnCconninfo(struct fuse_conn_info *conn,
-	bool capCaseInsensitive,
-	bool capReaddirPlus,
-	bool capDeleteAccess,
-	bool capOpenTrunc,
-	bool capAutoInvalData,
-	bool capWritebackCache,
-	bool capExplicitInvalData,
-	bool capCacheSymlinks,
-	bool capFlockLocks,
-	unsigned maxReadahead,
-	unsigned maxBackground,
-	unsigned congestionThreshold)
+// cgofuse_conn_opts carries the connection capabilities/tuning from Go to C as
+// one value, instead of a long positional argument list.
+typedef struct cgofuse_conn_opts
+{
+	bool capCaseInsensitive, capReaddirPlus, capDeleteAccess, capOpenTrunc;
+	bool capAutoInvalData, capWritebackCache, capExplicitInvalData, capCacheSymlinks, capFlockLocks;
+	unsigned maxReadahead, maxBackground, congestionThreshold;
+} cgofuse_conn_opts;
+
+static inline void hostAsgnCconninfo(struct fuse_conn_info *conn, cgofuse_conn_opts *o)
 {
 #if defined(__APPLE__)
-	if (capCaseInsensitive)
+	if (o->capCaseInsensitive)
 		FUSE_ENABLE_CASE_INSENSITIVE(conn);
 #elif defined(__NetBSD__) || defined(__OpenBSD__)
 #elif defined(__FreeBSD__) || defined(__linux__)
 #if FUSE_USE_VERSION >= 30
-	if (capReaddirPlus)
+	if (o->capReaddirPlus)
 		conn->want |= conn->capable & FUSE_CAP_READDIRPLUS;
 	else
 		conn->want &= ~FUSE_CAP_READDIRPLUS;
 #endif
 	// FUSE_CAP_ATOMIC_O_TRUNC was disabled in FUSE2 and is enabled in FUSE3.
 	// So disable it here, unless the user explicitly enables it.
-	if (capOpenTrunc)
+	if (o->capOpenTrunc)
 		conn->want |= conn->capable & FUSE_CAP_ATOMIC_O_TRUNC;
 	else
 		conn->want &= ~FUSE_CAP_ATOMIC_O_TRUNC;
@@ -463,11 +460,11 @@ static inline void hostAsgnCconninfo(struct fuse_conn_info *conn,
 	conn->want |= conn->capable & FSP_FUSE_CAP_STAT_EX;
 	cgofuse_stat_ex = 0 != (conn->want & FSP_FUSE_CAP_STAT_EX); // hack!
 #endif
-	if (capCaseInsensitive)
+	if (o->capCaseInsensitive)
 		conn->want |= conn->capable & FSP_FUSE_CAP_CASE_INSENSITIVE;
-	if (capReaddirPlus)
+	if (o->capReaddirPlus)
 		conn->want |= conn->capable & FSP_FUSE_CAP_READDIR_PLUS;
-	if (capDeleteAccess)
+	if (o->capDeleteAccess)
 		conn->want |= conn->capable & (1 << 24);//FSP_FUSE_CAP_DELETE_ACCESS
 #endif
 
@@ -476,14 +473,14 @@ static inline void hostAsgnCconninfo(struct fuse_conn_info *conn,
 #if defined(__APPLE__) || defined(__FreeBSD__) || defined(__linux__)
 #if defined(FUSE_CAP_AUTO_INVAL_DATA)
 	// Enabled by default in FUSE3: the kernel Getattr-revalidates before reads.
-	if (capAutoInvalData)
+	if (o->capAutoInvalData)
 		conn->want |= conn->capable & FUSE_CAP_AUTO_INVAL_DATA;
 	else
 		conn->want &= ~FUSE_CAP_AUTO_INVAL_DATA;
 #endif
 #if defined(FUSE_CAP_WRITEBACK_CACHE)
 	// Opt-in: the kernel buffers and coalesces writes (changes write semantics).
-	if (capWritebackCache)
+	if (o->capWritebackCache)
 		conn->want |= conn->capable & FUSE_CAP_WRITEBACK_CACHE;
 	else
 		conn->want &= ~FUSE_CAP_WRITEBACK_CACHE;
@@ -491,14 +488,14 @@ static inline void hostAsgnCconninfo(struct fuse_conn_info *conn,
 #if defined(FUSE_CAP_EXPLICIT_INVAL_DATA)
 	// Opt-in: only the file system invalidates cached data (pairs with
 	// disabling FUSE_CAP_AUTO_INVAL_DATA).
-	if (capExplicitInvalData)
+	if (o->capExplicitInvalData)
 		conn->want |= conn->capable & FUSE_CAP_EXPLICIT_INVAL_DATA;
 	else
 		conn->want &= ~FUSE_CAP_EXPLICIT_INVAL_DATA;
 #endif
 #if defined(FUSE_CAP_CACHE_SYMLINKS)
 	// Opt-in: the kernel caches symlink targets, avoiding repeated Readlink.
-	if (capCacheSymlinks)
+	if (o->capCacheSymlinks)
 		conn->want |= conn->capable & FUSE_CAP_CACHE_SYMLINKS;
 	else
 		conn->want &= ~FUSE_CAP_CACHE_SYMLINKS;
@@ -506,18 +503,18 @@ static inline void hostAsgnCconninfo(struct fuse_conn_info *conn,
 #if defined(FUSE_CAP_FLOCK_LOCKS)
 	// Enabled when the file system implements FileSystemFlock; the kernel only
 	// forwards flock requests when this capability is negotiated.
-	if (capFlockLocks)
+	if (o->capFlockLocks)
 		conn->want |= conn->capable & FUSE_CAP_FLOCK_LOCKS;
 	else
 		conn->want &= ~FUSE_CAP_FLOCK_LOCKS;
 #endif
 	// Tuning knobs; 0 leaves the libfuse/kernel default in place.
-	if (0 != maxReadahead)
-		conn->max_readahead = maxReadahead;
-	if (0 != maxBackground)
-		conn->max_background = maxBackground;
-	if (0 != congestionThreshold)
-		conn->congestion_threshold = congestionThreshold;
+	if (0 != o->maxReadahead)
+		conn->max_readahead = o->maxReadahead;
+	if (0 != o->maxBackground)
+		conn->max_background = o->maxBackground;
+	if (0 != o->congestionThreshold)
+		conn->congestion_threshold = o->congestionThreshold;
 #endif
 }
 
@@ -994,22 +991,21 @@ func c_fuse_opt_free_args(args *c_struct_fuse_args) {
 	C.fuse_opt_free_args(args)
 }
 
-func c_hostAsgnCconninfo(conn *c_struct_fuse_conn_info,
-	capCaseInsensitive c_bool,
-	capReaddirPlus c_bool,
-	capDeleteAccess c_bool,
-	capOpenTrunc c_bool,
-	capAutoInvalData c_bool,
-	capWritebackCache c_bool,
-	capExplicitInvalData c_bool,
-	capCacheSymlinks c_bool,
-	capFlockLocks c_bool,
-	maxReadahead c_unsigned,
-	maxBackground c_unsigned,
-	congestionThreshold c_unsigned) {
-	C.hostAsgnCconninfo(conn, capCaseInsensitive, capReaddirPlus, capDeleteAccess, capOpenTrunc,
-		capAutoInvalData, capWritebackCache, capExplicitInvalData, capCacheSymlinks, capFlockLocks,
-		maxReadahead, maxBackground, congestionThreshold)
+func c_hostAsgnCconninfo(conn *c_struct_fuse_conn_info, host *FileSystemHost) {
+	var o C.cgofuse_conn_opts
+	o.capCaseInsensitive = C.bool(host.capCaseInsensitive)
+	o.capReaddirPlus = C.bool(host.capReaddirPlus)
+	o.capDeleteAccess = C.bool(host.capDeleteAccess)
+	o.capOpenTrunc = C.bool(host.capOpenTrunc)
+	o.capAutoInvalData = C.bool(host.capAutoInvalData)
+	o.capWritebackCache = C.bool(host.capWritebackCache)
+	o.capExplicitInvalData = C.bool(host.capExplicitInvalData)
+	o.capCacheSymlinks = C.bool(host.capCacheSymlinks)
+	o.capFlockLocks = C.bool(hostHasFlock(host.fsop))
+	o.maxReadahead = C.unsigned(host.maxReadahead)
+	o.maxBackground = C.unsigned(host.maxBackground)
+	o.congestionThreshold = C.unsigned(host.congestionThreshold)
+	C.hostAsgnCconninfo(conn, &o)
 }
 func c_hostAsgnCconfig(conf *c_struct_fuse_config,
 	directIO c_bool,
