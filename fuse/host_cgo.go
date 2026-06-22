@@ -425,7 +425,8 @@ static inline void hostAsgnCconninfo(struct fuse_conn_info *conn,
 	bool capCaseInsensitive,
 	bool capReaddirPlus,
 	bool capDeleteAccess,
-	bool capOpenTrunc)
+	bool capOpenTrunc,
+	bool capAutoInvalData)
 {
 #if defined(__APPLE__)
 	if (capCaseInsensitive)
@@ -444,6 +445,14 @@ static inline void hostAsgnCconninfo(struct fuse_conn_info *conn,
 		conn->want |= conn->capable & FUSE_CAP_ATOMIC_O_TRUNC;
 	else
 		conn->want &= ~FUSE_CAP_ATOMIC_O_TRUNC;
+#if defined(FUSE_CAP_AUTO_INVAL_DATA)
+	// FUSE_CAP_AUTO_INVAL_DATA is enabled by default in FUSE3 and makes the
+	// kernel Getattr-revalidate before reads. Allow the file system to opt out.
+	if (capAutoInvalData)
+		conn->want |= conn->capable & FUSE_CAP_AUTO_INVAL_DATA;
+	else
+		conn->want &= ~FUSE_CAP_AUTO_INVAL_DATA;
+#endif
 #elif defined(_WIN32)
 #if defined(FSP_FUSE_CAP_STAT_EX)
 	conn->want |= conn->capable & FSP_FUSE_CAP_STAT_EX;
@@ -924,8 +933,9 @@ func c_hostAsgnCconninfo(conn *c_struct_fuse_conn_info,
 	capCaseInsensitive c_bool,
 	capReaddirPlus c_bool,
 	capDeleteAccess c_bool,
-	capOpenTrunc c_bool) {
-	C.hostAsgnCconninfo(conn, capCaseInsensitive, capReaddirPlus, capDeleteAccess, capOpenTrunc)
+	capOpenTrunc c_bool,
+	capAutoInvalData c_bool) {
+	C.hostAsgnCconninfo(conn, capCaseInsensitive, capReaddirPlus, capDeleteAccess, capOpenTrunc, capAutoInvalData)
 }
 func c_hostAsgnCconfig(conf *c_struct_fuse_config,
 	directIO c_bool,

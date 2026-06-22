@@ -34,6 +34,7 @@ type FileSystemHost struct {
 	capReaddirPlus     bool
 	capDeleteAccess    bool
 	capOpenTrunc       bool
+	capAutoInvalData   bool
 	directIO           bool
 	useIno             bool
 }
@@ -449,7 +450,8 @@ func hostInit(conn0 *c_struct_fuse_conn_info, conf0 *c_struct_fuse_config) (user
 		c_bool(host.capCaseInsensitive),
 		c_bool(host.capReaddirPlus),
 		c_bool(host.capDeleteAccess),
-		c_bool(host.capOpenTrunc))
+		c_bool(host.capOpenTrunc),
+		c_bool(host.capAutoInvalData))
 	c_hostAsgnCconfig(conf0,
 		c_bool(host.directIO),
 		c_bool(host.useIno))
@@ -635,6 +637,9 @@ func hostChflags(path0 *c_char, flags c_uint32_t) (errc0 c_int) {
 func NewFileSystemHost(fsop FileSystemInterface) *FileSystemHost {
 	host := &FileSystemHost{}
 	host.fsop = fsop
+	// FUSE3 enables auto cache invalidation by default; preserve that unless
+	// the file system explicitly opts out via SetCapAutoInvalData.
+	host.capAutoInvalData = true
 	return host
 }
 
@@ -662,6 +667,16 @@ func (host *FileSystemHost) SetCapDeleteAccess(value bool) {
 // Open flag [Linux only].
 func (host *FileSystemHost) SetCapOpenTrunc(value bool) {
 	host.capOpenTrunc = value
+}
+
+// SetCapAutoInvalData controls automatic page-cache invalidation [FUSE3 only].
+// It is enabled by default: the kernel revalidates a file's attributes (with a
+// Getattr) to detect modifications and invalidate stale cached data, which costs
+// a Getattr round-trip per read. A file system that drives cache invalidation
+// itself (e.g. via Notify) can pass false to suppress those Getattr calls. Must
+// be set before Mount is called.
+func (host *FileSystemHost) SetCapAutoInvalData(value bool) {
+	host.capAutoInvalData = value
 }
 
 // SetDirectIO causes the file system to disable page caching [FUSE3 only]. Must be set

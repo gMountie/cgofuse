@@ -339,7 +339,9 @@ func c_hostAsgnCconninfo(conn *c_struct_fuse_conn_info,
 	capCaseInsensitive c_bool,
 	capReaddirPlus c_bool,
 	capDeleteAccess c_bool,
-	capOpenTrunc c_bool) {
+	capOpenTrunc c_bool,
+	capAutoInvalData c_bool) {
+	_ = capAutoInvalData // WinFsp-FUSE has no auto-inval-data capability
 	conn.want |= conn.capable & FSP_FUSE_CAP_STAT_EX
 	cgofuse_stat_ex = 0 != conn.want&FSP_FUSE_CAP_STAT_EX // hack!
 	if capCaseInsensitive {
