@@ -298,6 +298,35 @@ func c_free(p unsafe.Pointer) {
 	}
 }
 
+// hostHandleNew/Del/Get associate a *FileSystemHost with an opaque pointer that
+// is stored as the FUSE private_data and recovered in every operation callback.
+// See host.go for the shared contract. The nocgo build cannot import
+// runtime/cgo (it pulls in cgo runtime symbols), so it keeps a guarded map.
+var (
+	hostGuard = sync.Mutex{}
+	hostTable = map[unsafe.Pointer]*FileSystemHost{}
+)
+
+func hostHandleNew(host *FileSystemHost) unsafe.Pointer {
+	p := c_malloc(1)
+	hostGuard.Lock()
+	hostTable[p] = host
+	hostGuard.Unlock()
+	return p
+}
+func hostHandleDel(p unsafe.Pointer) {
+	hostGuard.Lock()
+	delete(hostTable, p)
+	hostGuard.Unlock()
+	c_free(p)
+}
+func hostHandleGet(p unsafe.Pointer) *FileSystemHost {
+	hostGuard.Lock()
+	host := hostTable[p]
+	hostGuard.Unlock()
+	return host
+}
+
 func c_fuse_get_context() *c_struct_fuse_context {
 	p, _, _ := fuse_get_context.Call()
 	return (*c_struct_fuse_context)(unsafe.Pointer(p))

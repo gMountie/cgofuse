@@ -19,7 +19,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-	"sync"
 	"syscall"
 	"unsafe"
 )
@@ -39,34 +38,13 @@ type FileSystemHost struct {
 	useIno             bool
 }
 
-var (
-	hostGuard = sync.Mutex{}
-	hostTable = map[unsafe.Pointer]*FileSystemHost{}
-)
-
 const maxwidth = 1 << (30 + 10*(^uint(0)>>32&1))
 
-func hostHandleNew(host *FileSystemHost) unsafe.Pointer {
-	p := c_malloc(1)
-	hostGuard.Lock()
-	hostTable[p] = host
-	hostGuard.Unlock()
-	return p
-}
-
-func hostHandleDel(p unsafe.Pointer) {
-	hostGuard.Lock()
-	delete(hostTable, p)
-	hostGuard.Unlock()
-	c_free(p)
-}
-
-func hostHandleGet(p unsafe.Pointer) *FileSystemHost {
-	hostGuard.Lock()
-	host, _ := hostTable[p]
-	hostGuard.Unlock()
-	return host
-}
+// hostHandleNew, hostHandleDel and hostHandleGet associate a *FileSystemHost
+// with an opaque handle that can be passed to the FUSE library as private_data
+// and recovered in each operation callback. The implementation is build
+// specific: the cgo build uses a lock-free runtime/cgo.Handle, while the nocgo
+// (Windows) build uses a guarded map. See host_cgo.go and host_nocgo_windows.go.
 
 func copyCstatvfsFromFusestatfs(dst *c_fuse_statvfs_t, src *Statfs_t) {
 	c_hostCstatvfsFromFusestatfs(dst,

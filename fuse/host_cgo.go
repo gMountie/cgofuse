@@ -828,6 +828,7 @@ static int hostOptParse(struct fuse_args *args, void *data, const struct fuse_op
 }
 */
 import "C"
+import "runtime/cgo"
 import "unsafe"
 
 type (
@@ -881,6 +882,21 @@ func c_calloc(count c_size_t, size c_size_t) unsafe.Pointer {
 }
 func c_free(p unsafe.Pointer) {
 	C.free(p)
+}
+
+// hostHandleNew/Del/Get associate a *FileSystemHost with an opaque pointer that
+// is stored as the FUSE private_data and recovered in every operation callback.
+// A runtime/cgo.Handle is a small integer index backed by a lock-free table, so
+// the per-operation hostHandleGet avoids the global mutex the previous map-based
+// implementation took on every FUSE call. See host.go for the shared contract.
+func hostHandleNew(host *FileSystemHost) unsafe.Pointer {
+	return unsafe.Pointer(cgo.NewHandle(host))
+}
+func hostHandleDel(p unsafe.Pointer) {
+	cgo.Handle(uintptr(p)).Delete()
+}
+func hostHandleGet(p unsafe.Pointer) *FileSystemHost {
+	return cgo.Handle(uintptr(p)).Value().(*FileSystemHost)
 }
 
 func c_fuse_get_context() *c_struct_fuse_context {
