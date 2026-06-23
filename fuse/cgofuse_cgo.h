@@ -165,12 +165,15 @@ static void *cgofuse_init_fuse(void)
 	if (0 == h)
 		h = dlopen("/usr/local/lib/libfuse-t.dylib", RTLD_NOW); // FUSE-T (FUSE2 API)
 #else
-	// FUSE3 on macOS targets FUSE-T (upstream-compatible libfuse3); macFUSE's
-	// FUSE3 is a darwin dialect and is not supported here.
+	// FUSE3 on macOS targets FUSE-T's libfuse3 (upstream-API-compatible); macFUSE's
+	// FUSE3 is a darwin dialect and is not supported here. Load the libfuse3 dylib
+	// -- NOT libfuse-t.dylib, which is FUSE-T's FUSE2 API: handing it a FUSE3
+	// fuse_operations table dispatches callbacks at the wrong ABI offsets (garbage
+	// args, SIGSEGV).
 	if (0 == h)
-		h = dlopen("/usr/local/lib/libfuse-t.dylib", RTLD_NOW); // FUSE-T libfuse3
+		h = dlopen("/usr/local/lib/libfuse3.dylib", RTLD_NOW); // FUSE-T / libfuse3
 	if (0 == h)
-		h = dlopen("/usr/local/lib/libfuse3.dylib", RTLD_NOW); // libfuse3 (unversioned)
+		h = dlopen("/usr/local/lib/libfuse3.4.dylib", RTLD_NOW); // libfuse3 (versioned)
 #endif
 #elif defined(__FreeBSD__)
 #if FUSE_USE_VERSION < 30
