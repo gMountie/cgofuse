@@ -106,6 +106,11 @@ type opsSpyFS struct {
 }
 
 func (fs *opsSpyFS) Getattr(path string, stat *Stat_t, fh uint64) int {
+	// Report the current user as owner: macFUSE enforces permissions (unlike
+	// Linux FUSE without default_permissions), so root-owned entries would deny
+	// the test user's rename/chmod before they ever reach the filesystem.
+	stat.Uid = uint32(os.Getuid())
+	stat.Gid = uint32(os.Getgid())
 	switch path {
 	case "/":
 		stat.Mode = S_IFDIR | 0755
