@@ -213,21 +213,21 @@ jobs:
 
           mkdir p mnt
 
-          sudo ./memfs -o allow_other,default_permissions,attr_timeout=0 mnt &
+          sudo ./memfs -o allow_other,default_permissions,use_ino,attr_timeout=0 mnt &
           sleep 3
           (cd mnt && sudo prove -fr ../secfs.test/fstest/fstest/tests)
           (cd mnt && ../secfs.test/tools/bin/fsx -N 10000 test xxxxxx)
           (cd mnt && ../secfs.test/tools/bin/fsx -e -N 1000 test xxxx)
           sudo umount mnt
 
-          sudo ./memfs3 -o allow_other,default_permissions,attr_timeout=0 mnt &
+          sudo ./memfs3 -o allow_other,default_permissions,use_ino,attr_timeout=0 mnt &
           sleep 3
           (cd mnt && sudo prove -fr ../secfs.test/fstest/fstest/tests)
           (cd mnt && ../secfs.test/tools/bin/fsx -N 10000 test xxxxxx)
           (cd mnt && ../secfs.test/tools/bin/fsx -e -N 1000 test xxxx)
           sudo umount mnt
 
-          sudo ./passthrough -o allow_other,default_permissions,attr_timeout=0 p mnt &
+          sudo ./passthrough -o allow_other,default_permissions,use_ino,attr_timeout=0 p mnt &
           sleep 3
           (cd mnt && sudo prove -fr ../secfs.test/fstest/fstest/tests)
           (cd mnt && ../secfs.test/tools/bin/fsx -N 10000 test xxxxxx)
