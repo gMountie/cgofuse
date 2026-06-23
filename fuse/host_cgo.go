@@ -21,7 +21,11 @@ package fuse
 // upstream libfuse3 wiring. Build with -tags=fuse3 to target FUSE-T instead,
 // whose libfuse3 fork is upstream-API-compatible (struct stat / struct statvfs).
 #cgo darwin,!fuse3 CFLAGS: -DFUSE_USE_VERSION=28 -D_FILE_OFFSET_BITS=64 -I/usr/local/include/osxfuse/fuse -I/usr/local/include/fuse
-#cgo darwin,fuse3 CFLAGS: -DFUSE_USE_VERSION=39 -D_FILE_OFFSET_BITS=64 -I/usr/local/include/fuse3
+// darwin FUSE3: default targets FUSE-T (upstream libfuse3). -tags=fuse3,macfuse
+// targets macFUSE's FUSE3, which is a Darwin API dialect (fuse_darwin_attr,
+// struct statfs, fuse_darwin_fill_dir_t); CGOFUSE_MACFUSE gates that marshalling.
+#cgo darwin,fuse3,!macfuse CFLAGS: -DFUSE_USE_VERSION=39 -D_FILE_OFFSET_BITS=64 -I/usr/local/include/fuse3
+#cgo darwin,fuse3,macfuse CFLAGS: -DFUSE_USE_VERSION=39 -D_FILE_OFFSET_BITS=64 -DCGOFUSE_MACFUSE -I/usr/local/include/fuse3
 // FUSE3 is the default; build with -tags=fuse2 for FUSE2.
 #cgo freebsd,!fuse2 CFLAGS: -DFUSE_USE_VERSION=39 -D_FILE_OFFSET_BITS=64 -I/usr/local/include/fuse3
 #cgo freebsd,fuse2 CFLAGS: -DFUSE_USE_VERSION=28 -D_FILE_OFFSET_BITS=64 -I/usr/local/include/fuse

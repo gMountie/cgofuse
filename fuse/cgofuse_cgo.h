@@ -340,7 +340,20 @@ static BOOLEAN cgofuse_stat_ex = FALSE;
 
 #endif
 
-#if defined(__APPLE__) || defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__) || defined(__linux__)
+#if defined(CGOFUSE_MACFUSE)
+// macFUSE FUSE3 dialect: getattr fills fuse_darwin_attr and statfs fills the BSD
+// struct statfs, instead of the upstream struct stat / struct statvfs.
+typedef struct fuse_darwin_attr fuse_stat_t;
+typedef struct fuse_darwin_attr fuse_stat_ex_t;
+typedef struct statfs fuse_statvfs_t;
+typedef struct timespec fuse_timespec_t;
+typedef mode_t fuse_mode_t;
+typedef dev_t fuse_dev_t;
+typedef uid_t fuse_uid_t;
+typedef gid_t fuse_gid_t;
+typedef off_t fuse_off_t;
+typedef unsigned long fuse_opt_offset_t;
+#elif defined(__APPLE__) || defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__) || defined(__linux__)
 typedef struct stat fuse_stat_t;
 typedef struct stat fuse_stat_ex_t;
 typedef struct statvfs fuse_statvfs_t;
@@ -570,6 +583,20 @@ static inline void hostCstatvfsFromFusestatfs(fuse_statvfs_t *stbuf,
     uint64_t namemax)
 {
 	memset(stbuf, 0, sizeof *stbuf);
+#if defined(CGOFUSE_MACFUSE)
+	// BSD struct statfs has no f_frsize/f_favail/f_namemax and f_fsid is a struct.
+	stbuf->f_bsize = bsize;
+	stbuf->f_iosize = frsize;
+	stbuf->f_blocks = blocks;
+	stbuf->f_bfree = bfree;
+	stbuf->f_bavail = bavail;
+	stbuf->f_files = files;
+	stbuf->f_ffree = ffree;
+	(void)favail;
+	(void)fsid;
+	(void)flag;
+	(void)namemax;
+#else
 	stbuf->f_bsize = bsize;
 	stbuf->f_frsize = frsize;
 	stbuf->f_blocks = blocks;
@@ -581,6 +608,7 @@ static inline void hostCstatvfsFromFusestatfs(fuse_statvfs_t *stbuf,
 	stbuf->f_fsid = fsid;
 	stbuf->f_flag = flag;
 	stbuf->f_namemax = namemax;
+#endif /* CGOFUSE_MACFUSE */
 }
 
 static inline void hostCstatFromFusestat(fuse_stat_t *stbuf,
@@ -601,6 +629,28 @@ static inline void hostCstatFromFusestat(fuse_stat_t *stbuf,
     uint32_t flags)
 {
 	memset(stbuf, 0, sizeof *stbuf);
+#if defined(CGOFUSE_MACFUSE)
+	// fuse_darwin_attr has no st_ prefix and no dev field; it adds btimespec.
+	stbuf->ino = ino;
+	stbuf->mode = mode;
+	stbuf->nlink = nlink;
+	stbuf->uid = uid;
+	stbuf->gid = gid;
+	stbuf->rdev = rdev;
+	stbuf->size = size;
+	stbuf->blksize = blksize;
+	stbuf->blocks = blocks;
+	stbuf->atimespec.tv_sec = atimSec;
+	stbuf->atimespec.tv_nsec = atimNsec;
+	stbuf->mtimespec.tv_sec = mtimSec;
+	stbuf->mtimespec.tv_nsec = mtimNsec;
+	stbuf->ctimespec.tv_sec = ctimSec;
+	stbuf->ctimespec.tv_nsec = ctimNsec;
+	stbuf->btimespec.tv_sec = 0 != birthtimSec ? birthtimSec : ctimSec;
+	stbuf->btimespec.tv_nsec = 0 != birthtimSec ? birthtimNsec : ctimNsec;
+	stbuf->flags = flags;
+	(void)dev;
+#else
 	stbuf->st_dev = dev;
 	stbuf->st_ino = ino;
 	stbuf->st_mode = mode;
@@ -658,6 +708,7 @@ static inline void hostCstatFromFusestat(fuse_stat_t *stbuf,
 	stbuf->st_ctim.tv_sec = ctimSec;
 	stbuf->st_ctim.tv_nsec = ctimNsec;
 #endif
+#endif /* CGOFUSE_MACFUSE */
 }
 
 static inline void hostAsgnCfileinfo(struct fuse_file_info *fi,
@@ -677,7 +728,10 @@ static inline void hostAsgnCfileinfo(struct fuse_file_info *fi,
 static inline int hostFilldir(fuse_fill_dir_t filler, void *buf,
     char *name, fuse_stat_t *stbuf, fuse_off_t off)
 {
-#if FUSE_USE_VERSION < 30
+#if defined(CGOFUSE_MACFUSE)
+	// macFUSE FUSE3 readdir uses fuse_darwin_fill_dir_t (fuse_darwin_attr entries).
+	return ((fuse_darwin_fill_dir_t)filler)(buf, name, stbuf, off, FUSE_FILL_DIR_PLUS);
+#elif FUSE_USE_VERSION < 30
 	return filler(buf, name, stbuf, off);
 #else
 	return filler(buf, name, stbuf, off, FUSE_FILL_DIR_PLUS);
@@ -758,8 +812,8 @@ static int hostMount(int argc, char *argv[], void *data)
 	        .flush = (int (*)(const char *, struct fuse_file_info *))go_hostFlush,
 	        .release = (int (*)(const char *, struct fuse_file_info *))go_hostRelease,
 	        .fsync = (int (*)(const char *, int, struct fuse_file_info *))go_hostFsync,
-#if defined(__APPLE__) && FUSE_USE_VERSION < 30
-	        // macFUSE (FUSE2) xattr ops carry an extra position argument.
+#if (defined(__APPLE__) && FUSE_USE_VERSION < 30) || defined(CGOFUSE_MACFUSE)
+	        // macFUSE xattr ops carry an extra position argument (both FUSE2 and FUSE3).
 	        .setxattr = (int (*)(const char *, const char *, const char *, size_t, int, uint32_t))
 	            _hostSetxattr,
 	        .getxattr = (int (*)(const char *, const char *, char *, size_t, uint32_t))
@@ -774,6 +828,9 @@ static int hostMount(int argc, char *argv[], void *data)
 #if FUSE_USE_VERSION < 30
 	        .readdir = (int (*)(const char *, void *, fuse_fill_dir_t, fuse_off_t,
 	            struct fuse_file_info *))go_hostReaddir,
+#elif defined(CGOFUSE_MACFUSE)
+	        .readdir = (int (*)(const char *, void *, fuse_darwin_fill_dir_t, fuse_off_t,
+	            struct fuse_file_info *, enum fuse_readdir_flags flags))go_hostReaddir3,
 #else
 	        .readdir = (int (*)(const char *, void *, fuse_fill_dir_t, fuse_off_t,
 	            struct fuse_file_info *, enum fuse_readdir_flags flags))go_hostReaddir3,
