@@ -17,7 +17,7 @@ package main
 import (
 	"syscall"
 
-	"github.com/winfsp/cgofuse/fuse"
+	"github.com/gMountie/cgofuse/fuse"
 )
 
 func setuidgid() func() {

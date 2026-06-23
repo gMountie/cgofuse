@@ -22,7 +22,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/winfsp/cgofuse/fuse"
+	"github.com/gMountie/cgofuse/fuse"
 )
 
 type Notifyfs struct {

@@ -16,7 +16,7 @@
 package main
 
 import (
-	"github.com/winfsp/cgofuse/fuse"
+	"github.com/gMountie/cgofuse/fuse"
 )
 
 func (self *Memfs) Rename3(oldpath string, newpath string, flags uint32) (errc int) {

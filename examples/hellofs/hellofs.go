@@ -15,7 +15,7 @@ package main
 import (
 	"os"
 
-	"github.com/winfsp/cgofuse/fuse"
+	"github.com/gMountie/cgofuse/fuse"
 )
 
 const (

@@ -4,7 +4,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-`github.com/winfsp/cgofuse` — a cross-platform FUSE library for Go. User-mode
+`github.com/gMountie/cgofuse` — a cross-platform FUSE library for Go (a fork of
+`winfsp/cgofuse`). User-mode
 file systems implement `fuse.FileSystemInterface` (or embed `fuse.FileSystemBase`
 for defaults) and mount via `fuse.NewFileSystemHost(...).Mount(...)`. Single Go
 module, `go 1.26`, no third-party dependencies. The only importable package is

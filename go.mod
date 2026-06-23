@@ -1,3 +1,3 @@
-module github.com/winfsp/cgofuse
+module github.com/gMountie/cgofuse
 
 go 1.26
