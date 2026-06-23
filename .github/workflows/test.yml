@@ -263,4 +263,4 @@ jobs:
           # libfuse3. Run the pure-Go tests; the FUSE-T *mount* path (TestUnmount/
           # TestSignal) currently SIGSEGVs and needs debugging on real macOS, so
           # it is excluded here. TODO: enable the mount tests once that is fixed.
-          go test -tags=fuse3 -run 'TestHandle|TestRecoverAsErrno|TestErrorString|TestOptParse' -v -count=1 ./fuse
+          go test -tags=fuse3 -run 'TestHandle|TestRecoverAsErrno|TestErrorString|TestOptParse|TestResolveOps' -v -count=1 ./fuse
