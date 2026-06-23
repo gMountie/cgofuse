@@ -157,12 +157,21 @@ static void *cgofuse_init_fuse(void)
 	const char *dylib_path = getenv("CGOFUSE_LIBFUSE_PATH");
 	if (0 != dylib_path)
 		h = dlopen(dylib_path, RTLD_NOW);
+#if FUSE_USE_VERSION < 30
 	if (0 == h)
-		h = dlopen("/usr/local/lib/libfuse.2.dylib", RTLD_NOW); // MacFUSE/OSXFuse >= v4
+		h = dlopen("/usr/local/lib/libfuse.2.dylib", RTLD_NOW); // macFUSE >= v4
 	if (0 == h)
-		h = dlopen("/usr/local/lib/libosxfuse.2.dylib", RTLD_NOW); // MacFUSE/OSXFuse < v4
+		h = dlopen("/usr/local/lib/libosxfuse.2.dylib", RTLD_NOW); // macFUSE < v4
 	if (0 == h)
-		h = dlopen("/usr/local/lib/libfuse-t.dylib", RTLD_NOW); // FUSE-T
+		h = dlopen("/usr/local/lib/libfuse-t.dylib", RTLD_NOW); // FUSE-T (FUSE2 API)
+#else
+	// FUSE3 on macOS targets FUSE-T (upstream-compatible libfuse3); macFUSE's
+	// FUSE3 is a darwin dialect and is not supported here.
+	if (0 == h)
+		h = dlopen("/usr/local/lib/libfuse-t.dylib", RTLD_NOW); // FUSE-T libfuse3
+	if (0 == h)
+		h = dlopen("/usr/local/lib/libfuse3.dylib", RTLD_NOW); // libfuse3 (unversioned)
+#endif
 #elif defined(__FreeBSD__)
 #if FUSE_USE_VERSION < 30
 	h = dlopen("libfuse.so.2", RTLD_NOW);

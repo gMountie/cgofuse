@@ -230,3 +230,27 @@ jobs:
 
           rm -rf p
           rmdir mnt
+
+  # macFUSE cannot load its kext in CI and its FUSE3 is a darwin dialect, so
+  # macOS FUSE3 is tested via FUSE-T: kext-less (mounts in CI) and its libfuse3
+  # fork is upstream-API-compatible.
+  macos-fuse-t:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.mod
+
+      - name: Install FUSE-T
+        run: brew install --cask fuse-t
+
+      - name: Build and test FUSE3 via FUSE-T
+        run: |
+          go build -tags=fuse3 -v -o . ./...
+          go build -tags=fuse3,memfs3 -v -o memfs3 ./examples/memfs
+          go test -tags=fuse3 -v -count=1 ./fuse

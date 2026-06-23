@@ -16,9 +16,12 @@
 package fuse
 
 /*
-// macOS uses FUSE2 only: macFUSE's FUSE3 is a darwin dialect (fuse_darwin_attr,
-// struct statfs, changed ops) that does not match the upstream libfuse3 wiring.
-#cgo darwin CFLAGS: -DFUSE_USE_VERSION=28 -D_FILE_OFFSET_BITS=64 -I/usr/local/include/osxfuse/fuse -I/usr/local/include/fuse
+// macOS defaults to FUSE2 (macFUSE): macFUSE's FUSE3 is a darwin dialect
+// (fuse_darwin_attr, struct statfs, changed ops) that does not match the
+// upstream libfuse3 wiring. Build with -tags=fuse3 to target FUSE-T instead,
+// whose libfuse3 fork is upstream-API-compatible (struct stat / struct statvfs).
+#cgo darwin,!fuse3 CFLAGS: -DFUSE_USE_VERSION=28 -D_FILE_OFFSET_BITS=64 -I/usr/local/include/osxfuse/fuse -I/usr/local/include/fuse
+#cgo darwin,fuse3 CFLAGS: -DFUSE_USE_VERSION=39 -D_FILE_OFFSET_BITS=64 -I/usr/local/include/fuse3
 // FUSE3 is the default; build with -tags=fuse2 for FUSE2.
 #cgo freebsd,!fuse2 CFLAGS: -DFUSE_USE_VERSION=39 -D_FILE_OFFSET_BITS=64 -I/usr/local/include/fuse3
 #cgo freebsd,fuse2 CFLAGS: -DFUSE_USE_VERSION=28 -D_FILE_OFFSET_BITS=64 -I/usr/local/include/fuse
