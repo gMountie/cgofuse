@@ -11,7 +11,7 @@ _Cgofuse is a cross-platform FUSE library for Go. It is supported on multiple pl
 |            |**cgo**     |**!cgo**    |**FUSE**    |**FUSE3**   |
 |:----------:|:----------:|:----------:|:----------:|:----------:|
 |**Windows** |&#x2713;    |&#x2713;    |&#x2713;    |            |
-|**macOS**   |&#x2713;    |            |&#x2713;    |            |
+|**macOS**   |&#x2713;    |            |&#x2713;    |&#x2713;<sup>FUSE-T</sup>|
 |**Linux**   |&#x2713;    |            |&#x2713;    |&#x2713;    |
 |**FreeBSD** |&#x2713;    |            |&#x2713;    |&#x2713;    |
 |**NetBSD**  |&#x2713;    |            |&#x2713;    |            |
@@ -52,11 +52,18 @@ details. For the canonical, upstream library please refer to
     ```
 
 **macOS**
-- Prerequisites: [macFUSE](https://macfuse.github.io/), [command line tools](https://developer.apple.com/library/content/technotes/tn2339/_index.html)
-- Build:
+- Prerequisites: [macFUSE](https://macfuse.github.io/) (FUSE2) or [FUSE-T](https://www.fuse-t.org/) (FUSE3), [command line tools](https://developer.apple.com/library/content/technotes/tn2339/_index.html)
+- Build (macFUSE / FUSE2, the default):
     ```
     $ go install -v ./fuse ./examples/memfs ./examples/passthrough
     ```
+- Build (FUSE-T / FUSE3):
+    ```
+    $ go install -tags=fuse3 -v ./fuse ./examples/memfs
+    ```
+- Notes:
+    - macFUSE's *own* FUSE3 is a Darwin-specific API dialect and is **not** supported. On macOS, macFUSE is used via FUSE2 (the default) and FUSE3 is provided by FUSE-T, whose `libfuse3` is upstream-API-compatible.
+    - FUSE-T has two mount backends. Prefer **FSKit** (`-o backend=fskit`, macOS 15+) over the default NFS backend: on real hardware FUSE-T/NFS fails `fsx` mmap data-consistency checks and is several times slower for metadata, while FSKit is data-consistent and the fastest backend. macFUSE (FUSE2) passes the full `pjdfstest`/`fsx` conformance suite.
 
 **Linux**
 - Prerequisites: libfuse-dev, libfuse3-dev, gcc

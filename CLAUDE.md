@@ -44,6 +44,15 @@ Build variant is selected by environment/tags, not flags in code:
 - **nocgo** (Windows only): `CGO_ENABLED=0`. Pure-Go path that talks to WinFsp
   directly via syscalls.
 
+macOS specifics: macFUSE is FUSE2 only (its FUSE3 is a Darwin API dialect that
+does not compile against the upstream libfuse3 wiring). FUSE3 on macOS is via
+**FUSE-T** (`-tags=fuse3`), whose libfuse3 is upstream-compatible — its headers
+live under `/Library/Application Support/fuse-t/include/fuse3` (point `CPATH`
+there if macFUSE is also installed and shadows `/usr/local/include/fuse3`). FUSE-T
+has two backends selected with `-o backend=...`: prefer **fskit** (macOS 15+) over
+the default **nfs** — validated on real hardware, FUSE-T/NFS fails `fsx` mmap
+data-consistency and is slower for metadata, while FSKit and macFUSE are clean.
+
 The unit tests (`./fuse`) are pure Go and run anywhere. Real file-system
 conformance — `secfs.test`/`fstest` and `fsx` against the example mounts — only
 runs in CI (`.github/workflows/test.yml`), because it needs `/dev/fuse`, root,
