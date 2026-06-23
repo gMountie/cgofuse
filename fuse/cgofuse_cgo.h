@@ -433,11 +433,13 @@ typedef struct cgofuse_conn_opts
 
 static inline void hostAsgnCconninfo(struct fuse_conn_info *conn, cgofuse_conn_opts *o)
 {
-#if defined(__APPLE__)
+#if defined(__APPLE__) && FUSE_USE_VERSION < 30
+	// FUSE_ENABLE_CASE_INSENSITIVE is a macFUSE (FUSE2) extension; FUSE-T's
+	// upstream libfuse3 does not have it, so darwin+FUSE3 uses the path below.
 	if (o->capCaseInsensitive)
 		FUSE_ENABLE_CASE_INSENSITIVE(conn);
 #elif defined(__NetBSD__) || defined(__OpenBSD__)
-#elif defined(__FreeBSD__) || defined(__linux__)
+#elif defined(__FreeBSD__) || defined(__linux__) || (defined(__APPLE__) && FUSE_USE_VERSION >= 30)
 #if FUSE_USE_VERSION >= 30
 	if (o->capReaddirPlus)
 		conn->want |= conn->capable & FUSE_CAP_READDIRPLUS;
@@ -732,7 +734,8 @@ static int hostMount(int argc, char *argv[], void *data)
 	        .flush = (int (*)(const char *, struct fuse_file_info *))go_hostFlush,
 	        .release = (int (*)(const char *, struct fuse_file_info *))go_hostRelease,
 	        .fsync = (int (*)(const char *, int, struct fuse_file_info *))go_hostFsync,
-#if defined(__APPLE__)
+#if defined(__APPLE__) && FUSE_USE_VERSION < 30
+	        // macFUSE (FUSE2) xattr ops carry an extra position argument.
 	        .setxattr = (int (*)(const char *, const char *, const char *, size_t, int, uint32_t))
 	            _hostSetxattr,
 	        .getxattr = (int (*)(const char *, const char *, char *, size_t, uint32_t))
@@ -772,7 +775,7 @@ static int hostMount(int argc, char *argv[], void *data)
 #else
 	        .utimens = (int (*)(const char *, const fuse_timespec_t[2], struct fuse_file_info *))go_hostUtimens3,
 #endif
-#if defined(__APPLE__) || (defined(_WIN32) && defined(FSP_FUSE_CAP_STAT_EX))
+#if (defined(__APPLE__) && FUSE_USE_VERSION < 30) || (defined(_WIN32) && defined(FSP_FUSE_CAP_STAT_EX))
 	        .setchgtime = (int (*)(const char *, const fuse_timespec_t *))go_hostSetchgtime,
 	        .setcrtime = (int (*)(const char *, const fuse_timespec_t *))go_hostSetcrtime,
 	        .chflags = (int (*)(const char *, uint32_t))go_hostChflags,
