@@ -575,7 +575,23 @@ func c_hostOptParse(args *c_struct_fuse_args, data unsafe.Pointer, opts *c_struc
 	return c_int(r)
 }
 
+// nocgoLibfusePath is an optional path to the WinFsp DLL to load, configured
+// from Go via FileSystemHost.SetLibfusePath (c_hostSetLibfusePath). It mirrors
+// the cgofuse_libfuse_path override on the cgo builds.
+var nocgoLibfusePath string
+
+func c_hostSetLibfusePath(path string) {
+	nocgoLibfusePath = path
+}
+
 func fspload() (dll *syscall.DLL, err error) {
+	if "" != nocgoLibfusePath {
+		dll, err = syscall.LoadDLL(nocgoLibfusePath)
+		if nil == err {
+			return
+		}
+	}
+
 	dllname := ""
 	switch runtime.GOARCH {
 	case "arm64":

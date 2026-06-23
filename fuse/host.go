@@ -51,6 +51,7 @@ type FileSystemHost struct {
 	congestionThreshold  int
 	directIO             bool
 	useIno               bool
+	libpath              string
 }
 
 const maxwidth = 1 << (30 + 10*(^uint(0)>>32&1))
@@ -115,6 +116,9 @@ func hostDestroy(user_data unsafe.Pointer) {
 // to contain the mountpoint. It is also allowed for opts to be nil, although in this case the
 // mountpoint must be non-empty.
 func (host *FileSystemHost) Mount(mountpoint string, opts []string) bool {
+	if "" != host.libpath {
+		c_hostSetLibfusePath(host.libpath)
+	}
 	if 0 == c_hostFuseInit() {
 		if "windows" == runtime.GOOS {
 			panic("cgofuse: cannot find winfsp")

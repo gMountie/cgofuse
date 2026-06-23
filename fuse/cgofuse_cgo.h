@@ -55,6 +55,18 @@ static void *cgofuse_init_fuse(void);
 static cgofuse_mutex_t cgofuse_mutex = CGOFUSE_MUTEX_INITIALIZER;
 static void *cgofuse_module = 0;
 
+// cgofuse_libfuse_path is an optional path to the FUSE library to dlopen,
+// configured from Go via FileSystemHost.SetLibfusePath (c_hostSetLibfusePath).
+// When set it takes precedence over the built-in soname search. The library is
+// loaded once per process, so the first mount's value wins.
+static char *cgofuse_libfuse_path = 0;
+
+static void cgofuse_set_libfuse_path(const char *path)
+{
+	free(cgofuse_libfuse_path);
+	cgofuse_libfuse_path = (0 != path && 0 != path[0]) ? strdup(path) : 0;
+}
+
 static inline void *cgofuse_init_fast(int hardfail)
 {
 	void *Module = cgofuse_module;
@@ -152,10 +164,13 @@ static void *cgofuse_init_fuse(void)
 		return 0;
 
 	void *h = 0;
+	// configured path (FileSystemHost.SetLibfusePath) takes precedence on all platforms
+	if (0 != cgofuse_libfuse_path)
+		h = dlopen(cgofuse_libfuse_path, RTLD_NOW);
 #if defined(__APPLE__)
 	// runtime path for bundled dylib in e.g. Awesome.app/Contents/Frameworks/libfuse.dylib
 	const char *dylib_path = getenv("CGOFUSE_LIBFUSE_PATH");
-	if (0 != dylib_path)
+	if (0 == h && 0 != dylib_path)
 		h = dlopen(dylib_path, RTLD_NOW);
 #if FUSE_USE_VERSION < 30
 	if (0 == h)
@@ -177,19 +192,25 @@ static void *cgofuse_init_fuse(void)
 #endif
 #elif defined(__FreeBSD__)
 #if FUSE_USE_VERSION < 30
-	h = dlopen("libfuse.so.2", RTLD_NOW);
+	if (0 == h)
+		h = dlopen("libfuse.so.2", RTLD_NOW);
 #else
-	h = dlopen("libfuse3.so.3", RTLD_NOW);
+	if (0 == h)
+		h = dlopen("libfuse3.so.3", RTLD_NOW);
 #endif
 #elif defined(__NetBSD__)
-	h = dlopen("librefuse.so.2", RTLD_NOW);
+	if (0 == h)
+		h = dlopen("librefuse.so.2", RTLD_NOW);
 #elif defined(__OpenBSD__)
-	h = dlopen("libfuse.so", RTLD_NOW);
+	if (0 == h)
+		h = dlopen("libfuse.so", RTLD_NOW);
 #elif defined(__linux__)
 #if FUSE_USE_VERSION < 30
-	h = dlopen("libfuse.so.2", RTLD_NOW);
+	if (0 == h)
+		h = dlopen("libfuse.so.2", RTLD_NOW);
 #else
-	h = dlopen("libfuse3.so.3", RTLD_NOW);
+	if (0 == h)
+		h = dlopen("libfuse3.so.3", RTLD_NOW);
 	if (0 == h)
 		h = dlopen("libfuse3.so.4", RTLD_NOW); // some distros ship libfuse3 with this soname
 	if (0 == h)

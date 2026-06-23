@@ -119,3 +119,12 @@ func (host *FileSystemHost) SetDirectIO(value bool) {
 func (host *FileSystemHost) SetUseIno(value bool) {
 	host.useIno = value
 }
+
+// SetLibfusePath sets an explicit path to the FUSE library (libfuse / libfuse3
+// on UNIX, the WinFsp DLL on Windows) to load, overriding the built-in search.
+// This is the programmatic equivalent of the CGOFUSE_LIBFUSE_PATH environment
+// variable. Must be set before Mount is called. The FUSE library is loaded once
+// per process, so the first mount's value takes effect.
+func (host *FileSystemHost) SetLibfusePath(value string) {
+	host.libpath = value
+}

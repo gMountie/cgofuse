@@ -230,6 +230,11 @@ func c_hostStaticInit() {
 func c_hostFuseInit() c_int {
 	return C.hostFuseInit()
 }
+func c_hostSetLibfusePath(path string) {
+	p := C.CString(path)
+	defer C.free(unsafe.Pointer(p))
+	C.cgofuse_set_libfuse_path(p)
+}
 func c_hostMount(argc c_int, argv **c_char, data unsafe.Pointer) c_int {
 	return C.hostMount(argc, argv, data)
 }
